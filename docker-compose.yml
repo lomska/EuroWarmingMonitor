@@ -1,0 +1,53 @@
+# One database service: Postgres 17 + PostGIS + h3-pg, built from docker/Dockerfile.
+# Start it with:  docker compose up -d
+name: tempradar
+
+services:
+  db:
+    build: ./docker
+    image: tempradar-db
+    container_name: tempradar-db
+    restart: unless-stopped
+
+    # Values come from the .env file next to this one (never committed).
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      # Passwords for the three project roles, used by the init script
+      LOADER_PASSWORD: ${LOADER_PASSWORD}
+      TRANSFORMER_PASSWORD: ${TRANSFORMER_PASSWORD}
+      READER_PASSWORD: ${READER_PASSWORD}
+
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"   # your PC : container
+
+    volumes:
+      - pgdata:/var/lib/postgresql/data              # database files survive restarts
+      - ./docker/init:/docker-entrypoint-initdb.d:ro # run once, on an empty database
+
+    # Postgres uses shared memory for parallel queries; Docker's default (64 MB) is too small
+    shm_size: 1gb
+
+    # Settings for analytical work (sorts, window functions, index builds)
+    command:
+      - postgres
+      - -c
+      - shared_buffers=1GB
+      - -c
+      - work_mem=64MB
+      - -c
+      - maintenance_work_mem=512MB
+      - -c
+      - effective_cache_size=3GB
+
+    # "healthy" once Postgres accepts connections; $$ passes $ through to the container
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  pgdata:
