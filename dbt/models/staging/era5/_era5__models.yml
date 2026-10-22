@@ -1,0 +1,55 @@
+version: 2
+
+models:
+  - name: stg_era5__t2m_monthly
+    description: >
+      Monthly mean 2 m air temperature per ERA5 grid point, in °C.
+      One row per grid point and month.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [grid_point_id, valid_month]
+    columns:
+      - name: grid_point_id
+        description: Grid point id from its coordinates in hundredths of a degree, e.g. 4175_4450.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_era5__land_sea_mask')
+                field: grid_point_id
+      - name: valid_month
+        description: First day of the month the mean applies to.
+        data_tests: [not_null]
+      - name: year
+        data_tests: [not_null]
+      - name: month
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+                quote: false
+      - name: temp_c
+        description: Monthly mean 2 m air temperature in °C.
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: -90
+                max_value: 60
+      - name: is_preliminary
+        description: True for preliminary ERA5T months, which ECMWF may still revise.
+
+  - name: stg_era5__land_sea_mask
+    description: Land fraction per ERA5 grid point (0 = sea, 1 = land).
+    columns:
+      - name: grid_point_id
+        data_tests: [unique, not_null]
+      - name: land_fraction
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1

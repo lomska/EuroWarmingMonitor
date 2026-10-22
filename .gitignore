@@ -1,19 +1,24 @@
+# Downloaded and generated data
 data/
 
+# Secrets and local settings
 .env
 .cdsapirc
-profiles.yml
 
+# Python
 .venv/
 venv/
 __pycache__/
 *.pyc
 .ruff_cache/
 
+# dbt
 target/
 logs/
 dbt_packages/
+.user.yml
 
+# Editors and OS files
 .vscode/
 .idea/
 .DS_Store

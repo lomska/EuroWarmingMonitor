@@ -1,0 +1,25 @@
+# How dbt connects to Postgres.
+
+tempradar:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('POSTGRES_HOST', 'localhost') }}"
+      port: "{{ env_var('POSTGRES_PORT', '5432') | as_number }}"
+      dbname: "{{ env_var('POSTGRES_DB') }}"
+      user: transformer
+      password: "{{ env_var('TRANSFORMER_PASSWORD') }}"
+      schema: staging   # default schema; each layer sets its own in dbt_project.yml
+      threads: 4
+
+    # Used by GitHub Actions: same settings, its own database
+    ci:
+      type: postgres
+      host: "{{ env_var('POSTGRES_HOST', 'localhost') }}"
+      port: "{{ env_var('POSTGRES_PORT', '5432') | as_number }}"
+      dbname: "{{ env_var('POSTGRES_DB') }}"
+      user: transformer
+      password: "{{ env_var('TRANSFORMER_PASSWORD') }}"
+      schema: staging
+      threads: 2

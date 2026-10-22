@@ -1,0 +1,35 @@
+version: 2
+
+sources:
+  - name: era5
+    description: >
+      ERA5 monthly means from the Copernicus Climate Data Store, loaded
+      unchanged by load/load_era5.py.
+    schema: raw
+    config:
+      loaded_at_field: loaded_at
+      # New ERA5 months appear monthly, so 45 days without a load is suspicious
+      freshness:
+        warn_after: {count: 45, period: day}
+        error_after: {count: 75, period: day}
+
+    tables:
+      - name: era5_t2m_monthly
+        description: Monthly mean 2 m temperature, one row per grid point and month, in Kelvin.
+        columns:
+          - name: lat
+            data_tests: [not_null]
+          - name: lon
+            data_tests: [not_null]
+          - name: valid_month
+            data_tests: [not_null]
+
+      - name: era5_land_sea_mask
+        description: Fraction of land in each grid cell (0 = sea, 1 = land). Constant over time.
+        config:
+          freshness: null   # loaded once; it never changes
+
+      - name: _load_log
+        description: One row per loaded NetCDF file, written by the loader.
+        config:
+          freshness: null
