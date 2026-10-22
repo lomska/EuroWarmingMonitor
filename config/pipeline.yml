@@ -27,5 +27,9 @@ land_sea_mask:
   year: 2020
   month: "01"
 
+load:
+  # Months reshaped and sent to Postgres at a time; lower it if memory runs short
+  months_per_batch: 12
+
 paths:
   raw_dir: data/raw
