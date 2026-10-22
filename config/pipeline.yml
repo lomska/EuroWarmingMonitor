@@ -1,0 +1,31 @@
+# Settings shared by every pipeline step (extract now, load in Phase 3).
+# Change the study area or period here, not in the scripts.
+
+study_area:
+  name: caucasus
+  # Bounding box in degrees, the order the CDS API expects: [North, West, South, East]
+  area: [48, 36, 36, 52]
+
+period:
+  start_year: 1940
+  # Last month to download. ERA5 monthly means appear a few days after
+  # each month ends; move this forward when you want newer data.
+  end_month: "2026-09"
+
+era5:
+  dataset: reanalysis-era5-single-levels-monthly-means
+  product_type: monthly_averaged_reanalysis
+  variable: 2m_temperature
+  # null = native 0.25° grid. Use [1.0, 1.0] for the coarser global run.
+  grid: null
+  # Years per download request (one file each)
+  years_per_request: 10
+
+land_sea_mask:
+  variable: land_sea_mask
+  # The mask doesn't change over time, so any single month will do
+  year: 2020
+  month: "01"
+
+paths:
+  raw_dir: data/raw
