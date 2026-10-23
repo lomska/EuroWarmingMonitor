@@ -9,6 +9,9 @@ models:
       - dbt_utils.unique_combination_of_columns:
           arguments:
             combination_of_columns: [grid_point_id, valid_month]
+      - dbt_utils.equal_rowcount:
+          arguments:
+            compare_model: source('era5', 'era5_t2m_monthly')
     columns:
       - name: grid_point_id
         description: Grid point id from its coordinates in hundredths of a degree, e.g. 4175_4450.

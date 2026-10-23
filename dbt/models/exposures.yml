@@ -1,0 +1,21 @@
+version: 2
+
+exposures:
+  - name: tempradar_app
+    label: TempRadar city climate app
+    type: application
+    maturity: low
+    description: >
+      Streamlit app: search a city or town, see its grid square's monthly
+      normals, 10-year means, anomalies and warming trend, with an overview
+      map of the squares. Connects as the read-only reader role.
+    depends_on:
+      - ref('dim_city')
+      - ref('dim_grid_point')
+      - ref('dim_calendar_month')
+      - ref('fct_grid_normals')
+      - ref('fct_grid_rolling_10y')
+      - ref('fct_grid_anomaly')
+      - ref('mart_grid_warming_trend')
+    owner:
+      name: Tanya
