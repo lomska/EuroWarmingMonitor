@@ -50,6 +50,10 @@ cross join lateral (
             st_setsrid(st_makepoint(cities_in_area.lon, cities_in_area.lat), 4326)::geography
         ) / 1000 as distance_km
     from grid_points
-    order by grid_points.geom <-> st_setsrid(st_makepoint(cities_in_area.lon, cities_in_area.lat), 4326)
+    order by
+        grid_points.geom <-> st_setsrid(st_makepoint(cities_in_area.lon, cities_in_area.lat), 4326),
+        -- a place exactly on a border goes to the southern, then western, square
+        grid_points.lat,
+        grid_points.lon
     limit 1
 ) as nearest

@@ -34,3 +34,33 @@ models:
                 min_value: 0
                 # half the diagonal of a 0.25° square is about 18 km at 36°N
                 max_value: 20
+
+unit_tests:
+  - name: city_on_a_border_goes_to_the_southern_western_square
+    description: >
+      Four grid points around 41.625N 41.625E. A place on the east-west border
+      goes to the southern square, a place on the corner to the south-western
+      one, and a place inside a square to that square.
+    model: int_city_grid_point
+    given:
+      # Given as SQL because dbt cannot cast fixture values to PostGIS geometry
+      - input: ref('int_grid_squares')
+        format: sql
+        rows: |
+          select grid_point_id, lat, lon, st_setsrid(st_makepoint(lon, lat), 4326) as geom
+          from (values
+              ('4150_4150', 41.50::double precision, 41.50::double precision),
+              ('4150_4175', 41.50, 41.75),
+              ('4175_4150', 41.75, 41.50),
+              ('4175_4175', 41.75, 41.75)
+          ) as points (grid_point_id, lat, lon)
+      - input: ref('stg_geonames__cities')
+        rows:
+          - {city_id: 1, lat: 41.625, lon: 41.55}
+          - {city_id: 2, lat: 41.625, lon: 41.625}
+          - {city_id: 3, lat: 41.70, lon: 41.70}
+    expect:
+      rows:
+        - {city_id: 1, grid_point_id: '4150_4150'}
+        - {city_id: 2, grid_point_id: '4150_4150'}
+        - {city_id: 3, grid_point_id: '4175_4175'}

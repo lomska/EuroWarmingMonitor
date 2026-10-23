@@ -12,7 +12,8 @@ the effective resolution is a little coarser than the grid spacing.
 {% docs city_to_square %}
 Each GeoNames place (cities1000: places with at least 1,000 inhabitants)
 belongs to the square it lies in, which is the square of its nearest grid
-point. A square's temperature describes the whole square and its average
+point. A place exactly on the border between squares belongs to the southern
+square (on a corner, the south-western one). A square's temperature describes the whole square and its average
 height, not the town itself: coastal and mountain towns can differ by several
 degrees. Changes over time (anomalies, trends) are much less affected than
 absolute temperatures.
