@@ -1,6 +1,14 @@
 version: 2
 
 models:
+  - name: int_grid_squares
+    description: >
+      One row per ERA5 grid point with the square it represents, its area and
+      land fraction. Exposed to the app as dim_grid_point.
+    columns:
+      - name: grid_point_id
+        data_tests: [unique, not_null]
+
   - name: int_city_grid_point
     description: >
       The ERA5 grid point whose square contains each place in the study area.
@@ -16,7 +24,7 @@ models:
           - not_null
           - relationships:
               arguments:
-                to: ref('dim_grid_point')
+                to: ref('int_grid_squares')
                 field: grid_point_id
       - name: distance_km
         description: Distance from the place to its grid point, in km.

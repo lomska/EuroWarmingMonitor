@@ -10,7 +10,7 @@ with cities as (
 
 grid_points as (
 
-    select * from {{ ref('dim_grid_point') }}
+    select * from {{ ref('int_grid_squares') }}
 
 ),
 
