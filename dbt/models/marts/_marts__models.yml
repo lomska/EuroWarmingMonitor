@@ -345,6 +345,70 @@ models:
         description: True if any month in the window is preliminary.
         data_type: boolean
 
+  - name: fct_grid_annual_normals
+    description: >
+      Annual climate normals per grid square: the mean annual temperature over
+      the current and the earlier baseline, and the change between them.
+      {{ doc('climate_normals') }}
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: grid_point_id
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - unique
+          - relationships:
+              arguments:
+                to: ref('dim_grid_point')
+                field: grid_point_id
+      - name: normal_c
+        description: Mean annual temperature over the current baseline (default 1991-2020), °C.
+        data_type: double precision
+        data_tests: [not_null]
+      - name: early_normal_c
+        description: Mean annual temperature over the earlier baseline (default 1961-1990), °C.
+        data_type: double precision
+        data_tests: [not_null]
+      - name: change_c
+        description: normal_c minus early_normal_c; positive = warmer now.
+        data_type: double precision
+
+  - name: mart_grid_annual_warming_trend
+    description: >
+      Linear warming trend of the annual mean temperature per grid square over
+      all complete years, in °C per decade.
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: grid_point_id
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - unique
+          - relationships:
+              arguments:
+                to: ref('dim_grid_point')
+                field: grid_point_id
+      - name: warming_c_per_decade
+        description: Least-squares slope of annual temperature against year, times 10.
+        data_type: double precision
+        data_tests: [not_null]
+      - name: r_squared
+        description: Share of year-to-year variation explained by the trend (0 to 1).
+        data_type: double precision
+      - name: n_years
+        description: Number of complete years the trend is fitted on.
+        data_type: bigint
+      - name: first_year
+        data_type: integer
+      - name: last_year
+        data_type: integer
+
 unit_tests:
   - name: rolling_window_keeps_only_complete_windows
     description: >
