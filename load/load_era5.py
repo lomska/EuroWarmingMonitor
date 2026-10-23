@@ -1,7 +1,7 @@
 """Load the downloaded ERA5 NetCDF files into Postgres (schema raw).
 
 The data goes in exactly as it came, only reshaped from grids into rows
-(one row per grid point and month). 
+(one row per grid point and month).
 
 Safe to re-run:
   * a file already loaded and unchanged on disk is skipped;
@@ -16,60 +16,27 @@ Usage (from the project folder, with .venv active and the database running):
 from __future__ import annotations
 
 import argparse
-import hashlib
-import io
 import logging
-import os
 from datetime import date
 from pathlib import Path
 
 import pandas as pd
-import psycopg
 import xarray as xr
 import yaml
-from dotenv import load_dotenv
+
+from common import connect, logged_checksums, record_load, setup_logging, sha256, to_csv
 
 log = logging.getLogger("load")
 
 DEFAULT_CONFIG = Path("config/pipeline.yml")
-DDL_FILE = Path(__file__).parent / "ddl" / "raw_tables.sql"
 T2M_TABLE = "raw.era5_t2m_monthly"
 LSM_TABLE = "raw.era5_land_sea_mask"
 LSM_FILE = "era5_land_sea_mask.nc"
 
 
-# --- helpers -----------------------------------------------------------------
-
-def connect() -> psycopg.Connection:
-    """Connect as the loader role, with settings from .env."""
-    load_dotenv()
-    return psycopg.connect(
-        host=os.getenv("POSTGRES_HOST", "localhost"),
-        port=os.getenv("POSTGRES_PORT", "5432"),
-        dbname=os.environ["POSTGRES_DB"],
-        user="loader",
-        password=os.environ["LOADER_PASSWORD"],
-    )
-
-
-def sha256(path: Path) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        for block in iter(lambda: f.read(1024 * 1024), b""):
-            h.update(block)
-    return h.hexdigest()
-
-
 def month_range(ds: xr.Dataset) -> tuple[date, date]:
     times = pd.to_datetime(ds["valid_time"].values)
     return times.min().date(), times.max().date()
-
-
-def to_csv(df: pd.DataFrame) -> str:
-    """CSV text for COPY. Missing values become empty fields, which COPY reads as NULL."""
-    buf = io.StringIO()
-    df.to_csv(buf, index=False, header=False)
-    return buf.getvalue()
 
 
 # --- loading one file ----------------------------------------------------------
@@ -139,24 +106,6 @@ def load_lsm_file(conn, path: Path, checksum: str) -> int:
     return len(rows)
 
 
-def record_load(conn, source_file, table, rows, checksum, first, last) -> None:
-    conn.execute(
-        """
-        INSERT INTO raw._load_log
-            (source_file, target_table, row_count, checksum, first_month, last_month)
-        VALUES (%s, %s, %s, %s, %s, %s)
-        ON CONFLICT (source_file) DO UPDATE SET
-            target_table = EXCLUDED.target_table,
-            row_count    = EXCLUDED.row_count,
-            checksum     = EXCLUDED.checksum,
-            first_month  = EXCLUDED.first_month,
-            last_month   = EXCLUDED.last_month,
-            loaded_at    = now()
-        """,
-        (source_file, table, rows, checksum, first, last),
-    )
-
-
 def remove_outdated(conn, files_on_disk: set[str]) -> None:
     """Delete rows of temperature files that are logged but no longer on disk.
 
@@ -203,11 +152,7 @@ def main() -> None:
     parser.add_argument("--force", action="store_true", help="reload files even if unchanged")
     args = parser.parse_args()
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+    setup_logging()
 
     cfg = yaml.safe_load(args.config.read_text(encoding="utf-8"))
     raw_dir = Path(cfg["paths"]["raw_dir"])
@@ -219,12 +164,7 @@ def main() -> None:
         raise SystemExit(f"No ERA5 files in {raw_dir}. Run extract/download_era5.py first.")
 
     with connect() as conn:
-        conn.autocommit = True  # each file gets its own explicit transaction
-
-        # Create tables if missing, as the loader role
-        conn.execute(DDL_FILE.read_text(encoding="utf-8"))
-
-        logged = dict(conn.execute("SELECT source_file, checksum FROM raw._load_log").fetchall())
+        logged = logged_checksums(conn)
 
         remove_outdated(conn, {p.name for p in t2m_files})
 
@@ -239,7 +179,7 @@ def main() -> None:
                 rows = load_t2m_file(conn, path, checksum, months_per_batch)
             log.info("loaded %s: %s rows", path.name, f"{rows:,}")
 
-        # Refresh table statistics so the query planner knows the new sizes
+        # Update planner statistics after the load
         conn.execute(f"ANALYZE {T2M_TABLE}")
         conn.execute(f"ANALYZE {LSM_TABLE}")
 

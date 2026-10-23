@@ -1,5 +1,4 @@
-# dbt project for TempRadar: ERA5 temperatures on an H3 grid.
-# Run dbt commands from this folder (dbt/), e.g.  dotenv -f ../.env run -- dbt build
+# Run dbt from this folder: dotenv -f ../.env run -- dbt build
 
 name: tempradar
 version: "1.0.0"
@@ -15,12 +14,14 @@ analysis-paths: ["analyses"]
 
 clean-targets: ["target", "dbt_packages"]
 
-# Values used by the models; change them here (or with --vars) instead of in SQL
+# Changing grid_step_deg or window_years needs: dbt build --full-refresh
 vars:
-  h3_resolution: 4      # ~1,770 km² cells, matches the 0.25° ERA5 grid
-  window_years: 10      # length of the rolling window
-  baseline_start: 1991  # WMO climate normal used for anomalies
+  grid_step_deg: 0.25        # ERA5 grid spacing; must match era5.grid in config/pipeline.yml
+  window_years: 10           # length of the rolling window
+  baseline_start: 1991       # current WMO climate normal, used for anomalies
   baseline_end: 2020
+  early_baseline_start: 1961 # earlier normal, to show long-term change
+  early_baseline_end: 1990
 
 # One Postgres schema per layer (see macros/generate_schema_name.sql)
 models:

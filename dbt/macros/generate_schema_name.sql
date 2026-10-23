@@ -1,8 +1,4 @@
-{#
-    Use the schema names from dbt_project.yml exactly (staging, intermediate,
-    marts) instead of dbt's default "<profile schema>_<custom schema>",
-    which would give names like staging_marts.
-#}
+{# Use +schema names as-is (staging, intermediate, marts); the roles' grants rely on them. #}
 {% macro generate_schema_name(custom_schema_name, node) -%}
     {%- if custom_schema_name is none -%}
         {{ target.schema }}

@@ -1,0 +1,28 @@
+version: 2
+
+models:
+  - name: int_city_grid_point
+    description: >
+      The ERA5 grid point whose square contains each place in the study area.
+      On a regular grid, the nearest grid point (in degrees) is exactly the
+      centre of the square the place lies in.
+    columns:
+      - name: city_id
+        data_tests:
+          - unique
+          - not_null
+      - name: grid_point_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_grid_point')
+                field: grid_point_id
+      - name: distance_km
+        description: Distance from the place to its grid point, in km.
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                # half the diagonal of a 0.25° square is about 18 km at 36°N
+                max_value: 20

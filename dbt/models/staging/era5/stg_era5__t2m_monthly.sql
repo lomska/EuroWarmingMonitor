@@ -1,5 +1,4 @@
--- Monthly 2 m temperature per ERA5 grid point, converted to °C.
--- One row per grid point and month; light cleaning only (types, units, names).
+-- Monthly 2 m temperature per ERA5 grid point, in °C. One row per grid point and month.
 
 with source as (
 

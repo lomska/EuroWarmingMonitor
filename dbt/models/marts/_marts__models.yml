@@ -1,0 +1,128 @@
+version: 2
+
+models:
+  - name: dim_grid_point
+    description: >
+      One row per ERA5 grid point and the 0.25° square it represents
+      (the point is the square's centre).
+    columns:
+      - name: grid_point_id
+        description: Grid point id from its coordinates in hundredths of a degree, e.g. 4175_4450.
+        data_tests: [unique, not_null]
+      - name: square
+        description: The square as a polygon (SRID 4326).
+      - name: area_km2
+        description: Area of the square in km²; smaller further north.
+        data_tests: [not_null]
+      - name: land_fraction
+        description: Share of the square that is land (0 = sea, 1 = land).
+      - name: is_land
+        description: True when land_fraction is at least 0.5.
+
+  - name: dim_city
+    description: Searchable places in the study area, each with its grid square.
+    columns:
+      - name: city_id
+        description: GeoNames id.
+        data_tests: [unique, not_null]
+      - name: display_name
+        description: Name, region and country, e.g. "Kutaisi, Imereti, Georgia".
+        data_tests: [not_null]
+      - name: alternate_names
+        description: Other names and spellings, comma-separated (used by the search).
+      - name: elevation_m
+        description: Elevation of the place in metres (reported, else from a terrain model).
+      - name: grid_point_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_grid_point')
+                field: grid_point_id
+      - name: distance_to_grid_point_km
+        description: Distance from the place to the centre of its square.
+
+  - name: fct_grid_monthly_temp
+    description: Monthly mean 2 m temperature per grid point, in °C (incremental).
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [grid_point_id, valid_month]
+    columns:
+      - name: grid_point_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_grid_point')
+                field: grid_point_id
+      - name: valid_month
+        data_tests: [not_null]
+      - name: temp_c
+        description: Monthly mean 2 m air temperature in °C.
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: -90
+                max_value: 60
+      - name: is_preliminary
+        description: True for preliminary ERA5T values, which ECMWF may still revise.
+      - name: source_loaded_at
+        description: When the raw row was loaded; drives incremental runs.
+
+  - name: fct_grid_normals
+    description: >
+      Climate normals per grid point and calendar month: the mean over the
+      current baseline (var baseline_start-baseline_end, default 1991-2020),
+      over an earlier one (default 1961-1990), and the change between them.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [grid_point_id, month]
+    columns:
+      - name: normal_c
+        description: Mean temperature over the current baseline, in °C.
+        data_tests: [not_null]
+      - name: early_normal_c
+        description: Mean temperature over the earlier baseline, in °C.
+        data_tests: [not_null]
+      - name: change_c
+        description: normal_c minus early_normal_c; positive = warmer now.
+
+  - name: fct_grid_rolling_10y
+    description: >
+      Rolling mean temperature per grid point and calendar month over
+      var('window_years') years, labelled by the window's end year.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [grid_point_id, month, window_end_year]
+    columns:
+      - name: avg_temp_c
+        description: Mean temperature over the window, in °C.
+        data_tests: [not_null]
+
+  - name: fct_grid_anomaly
+    description: Monthly temperature minus the grid point's normal for that calendar month.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [grid_point_id, valid_month]
+    columns:
+      - name: anomaly_c
+        description: Difference from normal in °C; positive = warmer than normal.
+        data_tests: [not_null]
+
+  - name: mart_grid_warming_trend
+    description: Linear warming trend per grid point and calendar month, in °C per decade.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [grid_point_id, month]
+    columns:
+      - name: warming_c_per_decade
+        description: Least-squares slope of temperature against year, times 10.
+        data_tests: [not_null]
+      - name: r_squared
+        description: Share of year-to-year variation explained by the trend (0 to 1).

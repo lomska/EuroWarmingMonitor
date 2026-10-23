@@ -7,7 +7,7 @@
 
 -- Monthly 2 m temperature, one row per grid point and month ------------
 CREATE TABLE IF NOT EXISTS raw.era5_t2m_monthly (
-    lat          real        NOT NULL,  -- degrees north (0.25° steps are exact in real)
+    lat          real        NOT NULL,  -- degrees north
     lon          real        NOT NULL,  -- degrees east
     valid_month  date        NOT NULL,  -- first day of the month
     t2m_k        real,                  -- 2 m temperature in Kelvin, as delivered
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS raw.era5_t2m_monthly (
     loaded_at    timestamptz NOT NULL DEFAULT now()
 ) PARTITION BY RANGE (valid_month);
 
--- One partition per decade. A query for one period reads only its partitions.
+-- One partition per decade.
 CREATE TABLE IF NOT EXISTS raw.era5_t2m_monthly_1940s PARTITION OF raw.era5_t2m_monthly
     FOR VALUES FROM ('1940-01-01') TO ('1950-01-01');
 CREATE TABLE IF NOT EXISTS raw.era5_t2m_monthly_1950s PARTITION OF raw.era5_t2m_monthly
@@ -60,4 +60,64 @@ CREATE TABLE IF NOT EXISTS raw._load_log (
     first_month  date,                  -- time range in the file (NULL for the mask)
     last_month   date,
     loaded_at    timestamptz NOT NULL DEFAULT now()
+);
+
+
+-- GeoNames place lists, loaded as text exactly as in the files ------------
+-- (types are cast in dbt staging). Column names follow the GeoNames readme.
+CREATE TABLE IF NOT EXISTS raw.geonames_cities (
+    geonameid          text,
+    name               text,
+    asciiname          text,
+    alternatenames     text,
+    latitude           text,
+    longitude          text,
+    feature_class      text,
+    feature_code       text,
+    country_code       text,
+    cc2                text,
+    admin1_code        text,
+    admin2_code        text,
+    admin3_code        text,
+    admin4_code        text,
+    population         text,
+    elevation          text,
+    dem                text,   -- digital elevation model height (-9999 = none)
+    timezone           text,
+    modification_date  text,
+    source_file        text        NOT NULL,
+    loaded_at          timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS raw.geonames_admin1 (
+    code               text,   -- country.admin1, e.g. GE.66
+    name               text,
+    asciiname          text,
+    geonameid          text,
+    source_file        text        NOT NULL,
+    loaded_at          timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS raw.geonames_countries (
+    iso                text,
+    iso3               text,
+    iso_numeric        text,
+    fips               text,
+    country            text,
+    capital            text,
+    area_sq_km         text,
+    population         text,
+    continent          text,
+    tld                text,
+    currency_code      text,
+    currency_name      text,
+    phone              text,
+    postal_code_format text,
+    postal_code_regex  text,
+    languages          text,
+    geonameid          text,
+    neighbours         text,
+    equivalent_fips_code text,
+    source_file        text        NOT NULL,
+    loaded_at          timestamptz NOT NULL DEFAULT now()
 );

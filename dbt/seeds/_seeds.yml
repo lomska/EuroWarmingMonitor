@@ -1,0 +1,11 @@
+version: 2
+
+seeds:
+  - name: dim_calendar_month
+    description: Month number, names and season in each hemisphere.
+    config:
+      column_types:
+        month: integer
+    columns:
+      - name: month
+        data_tests: [unique, not_null]

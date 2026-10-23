@@ -1,5 +1,4 @@
-# One database service: Postgres 17 + PostGIS + h3-pg, built from docker/Dockerfile.
-# Start it with:  docker compose up -d
+# Postgres 17 + PostGIS, built from docker/Dockerfile. Start: docker compose up -d
 name: tempradar
 
 services:
@@ -9,27 +8,27 @@ services:
     container_name: tempradar-db
     restart: unless-stopped
 
-    # Values come from the .env file next to this one (never committed).
+    # Values come from .env (copy .env.example).
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-      # Passwords for the three project roles, used by the init script
+      # Role passwords, used once by docker/init/01_init.sh
       LOADER_PASSWORD: ${LOADER_PASSWORD}
       TRANSFORMER_PASSWORD: ${TRANSFORMER_PASSWORD}
       READER_PASSWORD: ${READER_PASSWORD}
 
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"   # your PC : container
+      - "${POSTGRES_PORT:-5432}:5432"   # set POSTGRES_PORT in .env if 5432 is taken
 
     volumes:
-      - pgdata:/var/lib/postgresql/data              # database files survive restarts
-      - ./docker/init:/docker-entrypoint-initdb.d:ro # run once, on an empty database
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/init:/docker-entrypoint-initdb.d:ro # runs only on an empty volume (reset: docker compose down -v)
 
-    # Postgres uses shared memory for parallel queries; Docker's default (64 MB) is too small
+    # Docker's 64 MB default is too small for parallel queries
     shm_size: 1gb
 
-    # Settings for analytical work (sorts, window functions, index builds)
+    # Memory settings; lower them on machines with less than 8 GB of RAM
     command:
       - postgres
       - -c
@@ -41,7 +40,7 @@ services:
       - -c
       - effective_cache_size=3GB
 
-    # "healthy" once Postgres accepts connections; $$ passes $ through to the container
+    # $$ = a literal $ for the container's shell
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s

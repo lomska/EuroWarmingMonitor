@@ -91,13 +91,8 @@ def download(client, dataset: str, request: dict, target: Path) -> None:
 
 
 def find_stale(raw_dir: Path, planned: set[str]) -> list[Path]:
-    """Temperature files on disk that the current plan no longer includes.
-
-    When end_month moves forward, the file for the unfinished year changes
-    name (era5_t2m_202601_202609.nc -> era5_t2m_202601_202610.nc), and when a
-    year completes, the last decade's file does too. The old files would
-    overlap the new ones, so they are removed. Leftover .part files from
-    interrupted downloads are removed as well.
+    """Files to delete: temperature files no longer in the plan (they would overlap
+    the new ones after end_month moves) and leftover .part files.
     """
     stale = [p for p in raw_dir.glob("era5_t2m_*.nc") if p.name not in planned]
     stale += list(raw_dir.glob("*.part"))

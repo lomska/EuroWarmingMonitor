@@ -1,5 +1,4 @@
-# Settings shared by every pipeline step (extract now, load in Phase 3).
-# Change the study area or period here, not in the scripts.
+# Settings shared by the extract and load scripts.
 
 study_area:
   name: caucasus
@@ -26,6 +25,16 @@ land_sea_mask:
   # The mask doesn't change over time, so any single month will do
   year: 2020
   month: "01"
+
+geonames:
+  # Place names with coordinates, population and elevation (CC BY 4.0).
+  # cities1000 = every place with at least 1,000 inhabitants.
+  base_url: https://download.geonames.org/export/dump
+  files:
+    - cities1000.zip         # unzipped to cities1000.txt
+    - admin1CodesASCII.txt   # region names (e.g. GE.66 -> Imereti)
+    - countryInfo.txt        # country names
+  dir: data/raw/geonames
 
 load:
   # Months reshaped and sent to Postgres at a time; lower it if memory runs short

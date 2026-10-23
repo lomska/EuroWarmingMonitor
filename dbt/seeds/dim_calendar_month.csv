@@ -1,0 +1,13 @@
+month,month_name,month_abbr,season_north,season_south
+1,January,Jan,Winter,Summer
+2,February,Feb,Winter,Summer
+3,March,Mar,Spring,Autumn
+4,April,Apr,Spring,Autumn
+5,May,May,Spring,Autumn
+6,June,Jun,Summer,Winter
+7,July,Jul,Summer,Winter
+8,August,Aug,Summer,Winter
+9,September,Sep,Autumn,Spring
+10,October,Oct,Autumn,Spring
+11,November,Nov,Autumn,Spring
+12,December,Dec,Winter,Summer

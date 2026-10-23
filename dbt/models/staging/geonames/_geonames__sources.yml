@@ -1,0 +1,21 @@
+version: 2
+
+sources:
+  - name: geonames
+    description: >
+      GeoNames place lists (https://www.geonames.org, CC BY 4.0), loaded as
+      text by load/load_geonames.py.
+    schema: raw
+    config:
+      freshness: null   # reference data, refreshed only occasionally
+
+    tables:
+      - name: geonames_cities
+        description: Every place with at least 1,000 inhabitants (cities1000.txt).
+        columns:
+          - name: geonameid
+            data_tests: [unique, not_null]
+      - name: geonames_admin1
+        description: First-level regions, e.g. GE.66 = Imereti (admin1CodesASCII.txt).
+      - name: geonames_countries
+        description: Country codes and names (countryInfo.txt).
