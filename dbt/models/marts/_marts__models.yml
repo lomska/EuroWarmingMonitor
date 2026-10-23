@@ -279,6 +279,72 @@ models:
       - name: last_year
         data_type: integer
 
+  - name: fct_grid_annual_temp
+    description: "{{ doc('annual_mean') }}"
+    config:
+      contract:
+        enforced: true
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [grid_point_id, year]
+    columns:
+      - name: grid_point_id
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_grid_point')
+                field: grid_point_id
+      - name: year
+        data_type: integer
+        constraints:
+          - type: not_null
+      - name: temp_c
+        description: Annual mean 2 m air temperature, °C (months weighted by days).
+        data_type: double precision
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: -60
+                max_value: 40
+      - name: is_preliminary
+        description: True if any month of the year is preliminary.
+        data_type: boolean
+
+  - name: fct_grid_rolling_10y_annual
+    description: >
+      Rolling mean of annual temperatures per grid square over `window_years`
+      years (default 10), labelled by the window's end year: the 1949 value is
+      the mean of the years 1940-1949. Complete windows only.
+    config:
+      contract:
+        enforced: true
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [grid_point_id, window_end_year]
+    columns:
+      - name: grid_point_id
+        data_type: text
+        constraints:
+          - type: not_null
+      - name: window_start_year
+        data_type: integer
+      - name: window_end_year
+        description: Last year in the window; the value's label.
+        data_type: integer
+      - name: avg_temp_c
+        description: Mean annual temperature over the window, °C.
+        data_type: double precision
+        data_tests: [not_null]
+      - name: is_preliminary
+        description: True if any month in the window is preliminary.
+        data_type: boolean
+
 unit_tests:
   - name: rolling_window_keeps_only_complete_windows
     description: >
@@ -304,3 +370,29 @@ unit_tests:
         - {grid_point_id: a, month: 1, window_start_year: 2000, window_end_year: 2002, avg_temp_c: 2.0, is_preliminary: false}
         - {grid_point_id: a, month: 1, window_start_year: 2001, window_end_year: 2003, avg_temp_c: 3.0, is_preliminary: false}
         - {grid_point_id: a, month: 1, window_start_year: 2002, window_end_year: 2004, avg_temp_c: 4.0, is_preliminary: true}
+
+  - name: annual_mean_weights_months_by_days_and_needs_12_months
+    description: >
+      In 2001, January is 365 °C and every other month 0 °C. Weighted by days,
+      the annual mean is 365 x 31 / 365 = 31.0 (a plain average of the 12 months
+      would give 30.4). 2002 has only one month and is left out.
+    model: fct_grid_annual_temp
+    given:
+      - input: ref('fct_grid_monthly_temp')
+        rows:
+          - {grid_point_id: 'p', valid_month: '2001-01-01', year: 2001, month: 1, temp_c: 365.0, is_preliminary: false}
+          - {grid_point_id: 'p', valid_month: '2001-02-01', year: 2001, month: 2, temp_c: 0.0, is_preliminary: false}
+          - {grid_point_id: 'p', valid_month: '2001-03-01', year: 2001, month: 3, temp_c: 0.0, is_preliminary: false}
+          - {grid_point_id: 'p', valid_month: '2001-04-01', year: 2001, month: 4, temp_c: 0.0, is_preliminary: false}
+          - {grid_point_id: 'p', valid_month: '2001-05-01', year: 2001, month: 5, temp_c: 0.0, is_preliminary: false}
+          - {grid_point_id: 'p', valid_month: '2001-06-01', year: 2001, month: 6, temp_c: 0.0, is_preliminary: false}
+          - {grid_point_id: 'p', valid_month: '2001-07-01', year: 2001, month: 7, temp_c: 0.0, is_preliminary: false}
+          - {grid_point_id: 'p', valid_month: '2001-08-01', year: 2001, month: 8, temp_c: 0.0, is_preliminary: false}
+          - {grid_point_id: 'p', valid_month: '2001-09-01', year: 2001, month: 9, temp_c: 0.0, is_preliminary: false}
+          - {grid_point_id: 'p', valid_month: '2001-10-01', year: 2001, month: 10, temp_c: 0.0, is_preliminary: false}
+          - {grid_point_id: 'p', valid_month: '2001-11-01', year: 2001, month: 11, temp_c: 0.0, is_preliminary: false}
+          - {grid_point_id: 'p', valid_month: '2001-12-01', year: 2001, month: 12, temp_c: 0.0, is_preliminary: true}
+          - {grid_point_id: 'p', valid_month: '2002-01-01', year: 2002, month: 1, temp_c: 5.0, is_preliminary: false}
+    expect:
+      rows:
+        - {grid_point_id: 'p', year: 2001, temp_c: 31.0, is_preliminary: true}

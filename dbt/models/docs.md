@@ -39,3 +39,10 @@ The most recent months of ERA5 are published first as preliminary data
 (ERA5T, `expver` other than `0001`) and may be revised. They are flagged with
 `is_preliminary`, which carries through to every mart.
 {% enddocs %}
+
+{% docs annual_mean %}
+The annual mean of a grid square is the mean of its 12 monthly means, each
+weighted by the month's number of days (leap years included). Only complete
+years are kept: a year still in progress would leave out its later months and
+come out too warm or too cold.
+{% enddocs %}

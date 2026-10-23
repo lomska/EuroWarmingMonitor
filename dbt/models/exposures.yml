@@ -15,6 +15,7 @@ exposures:
       - ref('dim_calendar_month')
       - ref('fct_grid_normals')
       - ref('fct_grid_rolling_10y')
+      - ref('fct_grid_rolling_10y_annual')
       - ref('fct_grid_anomaly')
       - ref('mart_grid_warming_trend')
     owner:
