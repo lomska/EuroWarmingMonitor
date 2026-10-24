@@ -9,6 +9,9 @@ models:
       One row per ERA5 grid point and the 0.25° square it represents.
       {{ doc('grid_squares') }}
     config:
+      indexes:
+        - columns: [grid_point_id]
+          unique: true
       contract:
         enforced: true
     columns:
@@ -46,6 +49,10 @@ models:
       Places in the study area that the app can search, each with its grid square.
       {{ doc('city_to_square') }}
     config:
+      indexes:
+        - columns: [city_id]
+          unique: true
+        - columns: [grid_point_id]
       contract:
         enforced: true
     columns:
@@ -106,6 +113,10 @@ models:
       Monthly mean 2 m air temperature per grid square, in °C. Incremental.
       {{ doc('preliminary') }}
     config:
+      indexes:
+        - columns: [grid_point_id, valid_month]
+          unique: true
+        - columns: [source_loaded_at]
       contract:
         enforced: true
     data_tests:
@@ -155,6 +166,9 @@ models:
       Climate normals per grid square and calendar month, and the change
       between the two periods. {{ doc('climate_normals') }}
     config:
+      indexes:
+        - columns: [grid_point_id, month]
+          unique: true
       contract:
         enforced: true
     data_tests:
@@ -186,6 +200,9 @@ models:
   - name: fct_grid_rolling_10y
     description: "{{ doc('rolling_window') }}"
     config:
+      indexes:
+        - columns: [grid_point_id, month, window_end_year]
+          unique: true
       contract:
         enforced: true
     data_tests:
@@ -218,6 +235,9 @@ models:
       Each month's temperature minus the grid square's 1991-2020 normal for that
       calendar month. Positive = warmer than normal.
     config:
+      indexes:
+        - columns: [grid_point_id, valid_month]
+          unique: true
       contract:
         enforced: true
     data_tests:
@@ -251,6 +271,9 @@ models:
       Linear warming trend per grid square and calendar month over the whole
       record, in °C per decade.
     config:
+      indexes:
+        - columns: [grid_point_id, month]
+          unique: true
       contract:
         enforced: true
     data_tests:
@@ -282,6 +305,9 @@ models:
   - name: fct_grid_annual_temp
     description: "{{ doc('annual_mean') }}"
     config:
+      indexes:
+        - columns: [grid_point_id, year]
+          unique: true
       contract:
         enforced: true
     data_tests:
@@ -321,6 +347,9 @@ models:
       years (default 10), labelled by the window's end year: the 1949 value is
       the mean of the years 1940-1949. Complete windows only.
     config:
+      indexes:
+        - columns: [grid_point_id, window_end_year]
+          unique: true
       contract:
         enforced: true
     data_tests:
@@ -351,6 +380,9 @@ models:
       the current and the earlier baseline, and the change between them.
       {{ doc('climate_normals') }}
     config:
+      indexes:
+        - columns: [grid_point_id]
+          unique: true
       contract:
         enforced: true
     columns:
@@ -381,6 +413,9 @@ models:
       Linear warming trend of the annual mean temperature per grid square over
       all complete years, in °C per decade.
     config:
+      indexes:
+        - columns: [grid_point_id]
+          unique: true
       contract:
         enforced: true
     columns:

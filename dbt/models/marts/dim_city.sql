@@ -1,5 +1,16 @@
 -- Places in the study area that can be searched, with their grid square.
 
+-- Trigram indexes for fast, typo-tolerant name search in the app
+-- (here rather than in YAML so that {{ this }} is filled in at run time).
+{{
+    config(
+        post_hook=[
+            "create index if not exists dim_city_name_trgm on {{ this }} using gin (city_name gin_trgm_ops)",
+            "create index if not exists dim_city_alt_names_trgm on {{ this }} using gin (alternate_names gin_trgm_ops)"
+        ]
+    )
+}}
+
 with cities as (
 
     select * from {{ ref('stg_geonames__cities') }}

@@ -1,0 +1,246 @@
+﻿Pager usage is off.
+==== 1. City search with a typo ("Tbilsi")
+                                                      QUERY PLAN                                                      
+----------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=3376.48..3376.51 rows=10 width=53) (actual time=209.092..209.110 rows=2 loops=1)
+   Buffers: shared hit=6 read=2239
+   ->  Sort  (cost=3376.48..3376.52 rows=14 width=53) (actual time=209.088..209.090 rows=2 loops=1)
+         Sort Key: (similarity(city_name, 'Tbilsi'::text)) DESC, population DESC NULLS LAST
+         Sort Method: quicksort  Memory: 25kB
+         Buffers: shared hit=6 read=2239
+         ->  Seq Scan on dim_city  (cost=0.00..3376.22 rows=14 width=53) (actual time=13.820..209.016 rows=2 loops=1)
+               Filter: ((city_name % 'Tbilsi'::text) OR (alternate_names ~~* '%Tbilsi%'::text))
+               Rows Removed by Filter: 75810
+               Buffers: shared read=2239
+ Planning:
+   Buffers: shared hit=137 read=10 dirtied=1
+ Planning Time: 21.618 ms
+ Execution Time: 209.203 ms
+(14 rows)
+
+==== 2. Monthly temperatures of one square (largest mart)
+                                                                       QUERY PLAN                                                                       
+--------------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=7294.39..7297.00 rows=1044 width=12) (actual time=316.763..316.806 rows=1041 loops=1)
+   Sort Key: fct_grid_monthly_temp.valid_month
+   Sort Method: quicksort  Memory: 81kB
+   Buffers: shared hit=2242 read=1049
+   InitPlan 1
+     ->  Limit  (cost=3186.66..3186.67 rows=1 width=17) (actual time=9.488..9.491 rows=1 loops=1)
+           Buffers: shared hit=2239
+           ->  Sort  (cost=3186.66..3186.67 rows=1 width=17) (actual time=9.486..9.488 rows=1 loops=1)
+                 Sort Key: dim_city.population DESC NULLS LAST
+                 Sort Method: quicksort  Memory: 25kB
+                 Buffers: shared hit=2239
+                 ->  Seq Scan on dim_city  (cost=0.00..3186.65 rows=1 width=17) (actual time=0.717..9.475 rows=1 loops=1)
+                       Filter: (city_name = 'Tbilisi'::text)
+                       Rows Removed by Filter: 75811
+                       Buffers: shared hit=2239
+   ->  Bitmap Heap Scan on fct_grid_monthly_temp  (cost=28.66..4055.37 rows=1044 width=12) (actual time=13.272..315.545 rows=1041 loops=1)
+         Recheck Cond: (grid_point_id = (InitPlan 1).col1)
+         Heap Blocks: exact=1041
+         Buffers: shared hit=2239 read=1049
+         ->  Bitmap Index Scan on e8d4a5b76003444d4c97ebb35266e531  (cost=0.00..28.39 rows=1044 width=0) (actual time=12.402..12.402 rows=1041 loops=1)
+               Index Cond: (grid_point_id = (InitPlan 1).col1)
+               Buffers: shared hit=2239 read=8
+ Planning:
+   Buffers: shared hit=69 read=7
+ Planning Time: 4.039 ms
+ Execution Time: 317.010 ms
+(26 rows)
+
+==== 3. Monthly 10-year means of one square
+                                                                              QUERY PLAN                                                                               
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using "0a5cda14b959003a501d83746a0731cc" on fct_grid_rolling_10y  (cost=3187.23..6433.18 rows=1815 width=16) (actual time=13.002..15.382 rows=933 loops=1)
+   Index Cond: (grid_point_id = (InitPlan 1).col1)
+   Buffers: shared hit=2239 read=18
+   InitPlan 1
+     ->  Limit  (cost=3186.66..3186.67 rows=1 width=17) (actual time=9.954..9.957 rows=1 loops=1)
+           Buffers: shared hit=2239
+           ->  Sort  (cost=3186.66..3186.67 rows=1 width=17) (actual time=9.953..9.954 rows=1 loops=1)
+                 Sort Key: dim_city.population DESC NULLS LAST
+                 Sort Method: quicksort  Memory: 25kB
+                 Buffers: shared hit=2239
+                 ->  Seq Scan on dim_city  (cost=0.00..3186.65 rows=1 width=17) (actual time=0.759..9.947 rows=1 loops=1)
+                       Filter: (city_name = 'Tbilisi'::text)
+                       Rows Removed by Filter: 75811
+                       Buffers: shared hit=2239
+ Planning:
+   Buffers: shared hit=34 dirtied=1
+ Planning Time: 0.379 ms
+ Execution Time: 15.459 ms
+(18 rows)
+
+==== 4. Annual 10-year means of one square
+                                                                                QUERY PLAN                                                                                 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using "85d8d68c17e23d6076452080d17df5a2" on fct_grid_rolling_10y_annual  (cost=3187.10..3329.44 rows=77 width=12) (actual time=12.977..12.994 rows=77 loops=1)
+   Index Cond: (grid_point_id = (InitPlan 1).col1)
+   Buffers: shared hit=2241 read=3
+   InitPlan 1
+     ->  Limit  (cost=3186.66..3186.67 rows=1 width=17) (actual time=11.610..11.612 rows=1 loops=1)
+           Buffers: shared hit=2239
+           ->  Sort  (cost=3186.66..3186.67 rows=1 width=17) (actual time=11.607..11.609 rows=1 loops=1)
+                 Sort Key: dim_city.population DESC NULLS LAST
+                 Sort Method: quicksort  Memory: 25kB
+                 Buffers: shared hit=2239
+                 ->  Seq Scan on dim_city  (cost=0.00..3186.65 rows=1 width=17) (actual time=1.331..11.597 rows=1 loops=1)
+                       Filter: (city_name = 'Tbilisi'::text)
+                       Rows Removed by Filter: 75811
+                       Buffers: shared hit=2239
+ Planning:
+   Buffers: shared hit=26 read=2 dirtied=1
+ Planning Time: 1.739 ms
+ Execution Time: 13.041 ms
+(18 rows)
+
+==== 5. Map: July warming per square, with the square polygons
+                                                              QUERY PLAN                                                               
+---------------------------------------------------------------------------------------------------------------------------------------
+ Hash Join  (cost=2139.05..13224.35 rows=40892 width=138) (actual time=39.410..146.183 rows=41869 loops=1)
+   Hash Cond: (t.grid_point_id = g.grid_point_id)
+   Buffers: shared hit=4 read=5889
+   ->  Seq Scan on mart_grid_warming_trend t  (cost=0.00..10976.35 rows=41501 width=18) (actual time=0.462..88.917 rows=41869 loops=1)
+         Filter: (month = 7)
+         Rows Removed by Filter: 460559
+         Buffers: shared hit=2 read=4694
+   ->  Hash  (cost=1615.69..1615.69 rows=41869 width=130) (actual time=38.624..38.625 rows=41869 loops=1)
+         Buckets: 65536  Batches: 1  Memory Usage: 7016kB
+         Buffers: shared hit=2 read=1195
+         ->  Seq Scan on dim_grid_point g  (cost=0.00..1615.69 rows=41869 width=130) (actual time=0.426..21.088 rows=41869 loops=1)
+               Buffers: shared hit=2 read=1195
+ Planning:
+   Buffers: shared hit=163 read=31 dirtied=3
+ Planning Time: 11.196 ms
+ Execution Time: 149.928 ms
+(16 rows)
+
+==== 6. Raw data for one month (partition pruning)
+                                                                         QUERY PLAN                                                                          
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=56366.18..56366.19 rows=1 width=8) (actual time=91.796..91.798 rows=1 loops=1)
+   Buffers: shared hit=11 read=516
+   ->  Bitmap Heap Scan on era5_t2m_monthly_1960s era5_t2m_monthly  (cost=26.53..56262.21 rows=41589 width=4) (actual time=9.781..88.839 rows=41869 loops=1)
+         Recheck Cond: (valid_month = '1965-07-01'::date)
+         Rows Removed by Index Recheck: 7795
+         Heap Blocks: lossy=512
+         Buffers: shared hit=11 read=516
+         ->  Bitmap Index Scan on era5_t2m_monthly_1960s_valid_month_idx  (cost=0.00..16.13 rows=46118 width=0) (actual time=0.764..0.764 rows=5120 loops=1)
+               Index Cond: (valid_month = '1965-07-01'::date)
+               Buffers: shared hit=11 read=4
+ Planning:
+   Buffers: shared hit=130 read=17
+ Planning Time: 9.359 ms
+ Execution Time: 92.284 ms
+(14 rows)
+
+==== 7. Rows an incremental dbt run must find (filter on loaded_at)
+                                                                                               QUERY PLAN                                                                                               
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=610215.62..610215.63 rows=1 width=8) (actual time=548.643..562.036 rows=1 loops=1)
+   Buffers: shared hit=3 read=30
+   InitPlan 2
+     ->  Result  (cost=0.46..0.47 rows=1 width=8) (actual time=271.753..271.757 rows=1 loops=1)
+           Buffers: shared read=4
+           InitPlan 1
+             ->  Limit  (cost=0.44..0.46 rows=1 width=8) (actual time=2.726..2.729 rows=1 loops=1)
+                   Buffers: shared read=4
+                   ->  Index Only Scan Backward using cec5c2b7188fbf420267e2af9cc4d453 on fct_grid_monthly_temp  (cost=0.44..910306.82 rows=43585700 width=8) (actual time=2.716..2.717 rows=1 loops=1)
+                         Index Cond: (source_loaded_at IS NOT NULL)
+                         Heap Fetches: 0
+                         Buffers: shared read=4
+   ->  Gather  (cost=610214.94..610215.15 rows=2 width=8) (actual time=274.766..561.964 rows=3 loops=1)
+         Workers Planned: 2
+         Workers Launched: 2
+         Buffers: shared hit=3 read=30
+         ->  Partial Aggregate  (cost=609214.94..609214.95 rows=1 width=8) (actual time=156.424..156.433 rows=1 loops=3)
+               Buffers: shared hit=3 read=26
+               ->  Parallel Append  (cost=439.57..594084.06 rows=6052351 width=0) (actual time=0.324..0.331 rows=0 loops=3)
+                     Buffers: shared hit=3 read=26
+                     ->  Parallel Bitmap Heap Scan on era5_t2m_monthly_1990s era5_t2m_monthly_6  (cost=439.62..64999.76 rows=698248 width=0) (actual time=0.094..0.096 rows=0 loops=1)
+                           Recheck Cond: (loaded_at > (InitPlan 2).col1)
+                           Buffers: shared read=3
+                           ->  Bitmap Index Scan on era5_t2m_monthly_1990s_loaded_at_idx  (cost=0.00..20.67 rows=1683483 width=0) (actual time=0.092..0.093 rows=0 loops=1)
+                                 Index Cond: (loaded_at > (InitPlan 2).col1)
+                                 Buffers: shared read=3
+                     ->  Parallel Bitmap Heap Scan on era5_t2m_monthly_1960s era5_t2m_monthly_3  (cost=439.57..64998.74 rows=698170 width=0) (actual time=0.125..0.126 rows=0 loops=1)
+                           Recheck Cond: (loaded_at > (InitPlan 2).col1)
+                           Buffers: shared read=3
+                           ->  Bitmap Index Scan on era5_t2m_monthly_1960s_loaded_at_idx  (cost=0.00..20.67 rows=1683295 width=0) (actual time=0.123..0.123 rows=0 loops=1)
+                                 Index Cond: (loaded_at > (InitPlan 2).col1)
+                                 Buffers: shared read=3
+                     ->  Parallel Bitmap Heap Scan on era5_t2m_monthly_2010s era5_t2m_monthly_8  (cost=439.47..64996.43 rows=697995 width=0) (actual time=0.095..0.096 rows=0 loops=1)
+                           Recheck Cond: (loaded_at > (InitPlan 2).col1)
+                           Buffers: shared read=3
+                           ->  Bitmap Index Scan on era5_t2m_monthly_2010s_loaded_at_idx  (cost=0.00..20.67 rows=1682872 width=0) (actual time=0.092..0.093 rows=0 loops=1)
+                                 Index Cond: (loaded_at > (InitPlan 2).col1)
+                                 Buffers: shared read=3
+                     ->  Parallel Bitmap Heap Scan on era5_t2m_monthly_2000s era5_t2m_monthly_7  (cost=439.32..64993.10 rows=697742 width=0) (actual time=0.087..0.087 rows=0 loops=1)
+                           Recheck Cond: (loaded_at > (InitPlan 2).col1)
+                           Buffers: shared read=3
+                           ->  Bitmap Index Scan on era5_t2m_monthly_2000s_loaded_at_idx  (cost=0.00..20.67 rows=1682262 width=0) (actual time=0.085..0.085 rows=0 loops=1)
+                                 Index Cond: (loaded_at > (InitPlan 2).col1)
+                                 Buffers: shared read=3
+                     ->  Parallel Bitmap Heap Scan on era5_t2m_monthly_1980s era5_t2m_monthly_5  (cost=439.23..64991.19 rows=697597 width=0) (actual time=0.088..0.089 rows=0 loops=1)
+                           Recheck Cond: (loaded_at > (InitPlan 2).col1)
+                           Buffers: shared read=3
+                           ->  Bitmap Index Scan on era5_t2m_monthly_1980s_loaded_at_idx  (cost=0.00..20.67 rows=1681912 width=0) (actual time=0.086..0.086 rows=0 loops=1)
+                                 Index Cond: (loaded_at > (InitPlan 2).col1)
+                                 Buffers: shared read=3
+                     ->  Parallel Bitmap Heap Scan on era5_t2m_monthly_1940s era5_t2m_monthly_1  (cost=439.15..64989.47 rows=697466 width=0) (actual time=0.091..0.091 rows=0 loops=1)
+                           Recheck Cond: (loaded_at > (InitPlan 2).col1)
+                           Buffers: shared read=3
+                           ->  Bitmap Index Scan on era5_t2m_monthly_1940s_loaded_at_idx  (cost=0.00..20.67 rows=1681598 width=0) (actual time=0.089..0.089 rows=0 loops=1)
+                                 Index Cond: (loaded_at > (InitPlan 2).col1)
+                                 Buffers: shared read=3
+                     ->  Parallel Bitmap Heap Scan on era5_t2m_monthly_1970s era5_t2m_monthly_4  (cost=439.09..64988.15 rows=697366 width=0) (actual time=0.084..0.084 rows=0 loops=1)
+                           Recheck Cond: (loaded_at > (InitPlan 2).col1)
+                           Buffers: shared read=3
+                           ->  Bitmap Index Scan on era5_t2m_monthly_1970s_loaded_at_idx  (cost=0.00..20.67 rows=1681356 width=0) (actual time=0.082..0.082 rows=0 loops=1)
+                                 Index Cond: (loaded_at > (InitPlan 2).col1)
+                                 Buffers: shared read=3
+                     ->  Parallel Bitmap Heap Scan on era5_t2m_monthly_1950s era5_t2m_monthly_2  (cost=438.43..64973.68 rows=696266 width=0) (actual time=0.099..0.099 rows=0 loops=1)
+                           Recheck Cond: (loaded_at > (InitPlan 2).col1)
+                           Buffers: shared read=3
+                           ->  Bitmap Index Scan on era5_t2m_monthly_1950s_loaded_at_idx  (cost=0.00..20.67 rows=1678704 width=0) (actual time=0.097..0.097 rows=0 loops=1)
+                                 Index Cond: (loaded_at > (InitPlan 2).col1)
+                                 Buffers: shared read=3
+                     ->  Parallel Bitmap Heap Scan on era5_t2m_monthly_2020s era5_t2m_monthly_9  (cost=298.07..43891.78 rows=471500 width=0) (actual time=0.201..0.202 rows=0 loops=1)
+                           Recheck Cond: (loaded_at > (InitPlan 2).col1)
+                           Buffers: shared hit=3 read=2
+                           ->  Bitmap Index Scan on era5_t2m_monthly_2020s_loaded_at_idx  (cost=0.00..15.17 rows=1139273 width=0) (actual time=0.189..0.190 rows=0 loops=1)
+                                 Index Cond: (loaded_at > (InitPlan 2).col1)
+                                 Buffers: shared hit=3 read=2
+                     ->  Parallel Seq Scan on era5_t2m_monthly_default era5_t2m_monthly_10  (cost=0.00..0.00 rows=1 width=0) (actual time=0.003..0.003 rows=0 loops=1)
+                           Filter: (loaded_at > (InitPlan 2).col1)
+ Planning:
+   Buffers: shared hit=351 read=16 dirtied=1
+ Planning Time: 8.522 ms
+ JIT:
+   Functions: 134
+   Options: Inlining true, Optimization true, Expressions true, Deforming true
+   Timing: Generation 7.123 ms (Deform 2.892 ms), Inlining 233.959 ms, Optimization 263.364 ms, Emission 240.056 ms, Total 744.502 ms
+ Execution Time: 798.994 ms
+(84 rows)
+
+==== Table sizes
+            table_name             | total_size | approx_rows 
+-----------------------------------+------------+-------------
+ marts.fct_grid_anomaly            | 4823 MB    |    43585689
+ marts.fct_grid_monthly_temp       | 4782 MB    |    43585701
+ marts.fct_grid_rolling_10y        | 4052 MB    |    39063840
+ raw.era5_t2m_monthly_1970s        | 436 MB     |     5021036
+ raw.era5_t2m_monthly_2000s        | 436 MB     |     5023742
+ raw.era5_t2m_monthly_1980s        | 436 MB     |     5022697
+ raw.era5_t2m_monthly_1960s        | 436 MB     |     5026826
+ raw.era5_t2m_monthly_1940s        | 436 MB     |     5021758
+ raw.era5_t2m_monthly_1950s        | 436 MB     |     5013116
+ raw.era5_t2m_monthly_1990s        | 436 MB     |     5027387
+ raw.era5_t2m_monthly_2010s        | 436 MB     |     5025563
+ marts.fct_grid_annual_temp        | 315 MB     |     3600734
+ marts.fct_grid_rolling_10y_annual | 307 MB     |     3223913
+ raw.era5_t2m_monthly_2020s        | 294 MB     |     3394802
+ marts.mart_grid_warming_trend     | 52 MB      |      502428
+(15 rows)
+

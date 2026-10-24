@@ -41,6 +41,14 @@ CREATE TABLE IF NOT EXISTS raw.era5_t2m_monthly_default PARTITION OF raw.era5_t2
     DEFAULT;
 
 
+-- BRIN indexes: tiny, and suited to columns that grow with insertion order.
+-- loaded_at lets incremental dbt runs skip old rows; valid_month narrows
+-- month queries inside a decade partition.
+CREATE INDEX IF NOT EXISTS era5_t2m_monthly_loaded_at_brin
+    ON raw.era5_t2m_monthly USING brin (loaded_at);
+CREATE INDEX IF NOT EXISTS era5_t2m_monthly_valid_month_brin
+    ON raw.era5_t2m_monthly USING brin (valid_month);
+
 -- Land-sea mask, one row per grid point -----------------------------------
 CREATE TABLE IF NOT EXISTS raw.era5_land_sea_mask (
     lat          real        NOT NULL,

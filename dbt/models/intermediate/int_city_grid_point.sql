@@ -8,7 +8,9 @@ with cities as (
 
 ),
 
-grid_points as (
+-- not materialized: grid_points is used twice, and a materialized CTE would
+-- copy the rows without their spatial index, so the search would scan them all
+grid_points as not materialized (
 
     select * from {{ ref('int_grid_squares') }}
 
@@ -43,17 +45,27 @@ select
 
 from cities_in_area
 cross join lateral (
+    -- The 4 nearest grid points come from the spatial index (ORDER BY distance
+    -- only). A place ties with at most 4 points (on a corner), so re-sorting
+    -- these 4 with the tie-breaker gives the same answer as sorting them all.
     select
-        grid_points.grid_point_id,
+        nearest_four.grid_point_id,
         st_distance(
-            grid_points.geom::geography,
+            nearest_four.geom::geography,
             st_setsrid(st_makepoint(cities_in_area.lon, cities_in_area.lat), 4326)::geography
         ) / 1000 as distance_km
-    from grid_points
-    order by
-        grid_points.geom <-> st_setsrid(st_makepoint(cities_in_area.lon, cities_in_area.lat), 4326),
-        -- a place exactly on a border goes to the southern, then western, square
-        grid_points.lat,
-        grid_points.lon
+    from (
+        select
+            grid_points.grid_point_id,
+            grid_points.lat,
+            grid_points.lon,
+            grid_points.geom,
+            grid_points.geom <-> st_setsrid(st_makepoint(cities_in_area.lon, cities_in_area.lat), 4326) as dist
+        from grid_points
+        order by grid_points.geom <-> st_setsrid(st_makepoint(cities_in_area.lon, cities_in_area.lat), 4326)
+        limit 4
+    ) as nearest_four
+    -- a place exactly on a border goes to the southern, then western, square
+    order by nearest_four.dist, nearest_four.lat, nearest_four.lon
     limit 1
 ) as nearest

@@ -2,6 +2,11 @@ version: 2
 
 models:
   - name: int_grid_squares
+    config:
+      indexes:
+        # spatial index for the nearest-grid-point search in int_city_grid_point
+        - columns: [geom]
+          type: gist
     description: >
       One row per ERA5 grid point with the square it represents, its area and
       land fraction. Exposed to the app as dim_grid_point.
