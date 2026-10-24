@@ -1,0 +1,86 @@
+# On every pull request and push to main: lint the code, then run the whole
+# pipeline (load, dbt build, tests, docs) on a small made-up data set.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read   # pull the database image from ghcr.io
+    env:
+      DBT_SEND_ANONYMOUS_USAGE_STATS: "false"
+
+    services:
+      db:
+        image: ghcr.io/${{ github.repository_owner }}/tempradar-db:latest
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        # Throwaway passwords: this database exists only during the run
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-postgres
+          POSTGRES_DB: climate
+          LOADER_PASSWORD: ci-loader
+          TRANSFORMER_PASSWORD: ci-transformer
+          READER_PASSWORD: ci-reader
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U postgres -d climate"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      - name: Install Python packages
+        run: pip install -r requirements-dev.txt
+
+      - name: Write .env for the CI database
+        run: |
+          cat > .env <<'EOF'
+          POSTGRES_HOST=localhost
+          POSTGRES_PORT=5432
+          POSTGRES_DB=climate
+          LOADER_PASSWORD=ci-loader
+          TRANSFORMER_PASSWORD=ci-transformer
+          READER_PASSWORD=ci-reader
+          EOF
+
+      - name: Install dbt packages
+        working-directory: dbt
+        run: dbt deps
+
+      - name: Lint (file checks, ruff, SQLFluff)
+        run: pre-commit run --all-files --show-diff-on-failure
+
+      - name: Make the test data
+        run: python ci/make_fixture.py
+
+      - name: Load, build, test, docs
+        run: python pipeline.py load transform test docs --config ci/pipeline.yml --target ci
+
+      - name: Upload dbt docs and run results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dbt-docs
+          path: |
+            docs/index.html
+            dbt/target/run_results.json
+          if-no-files-found: ignore

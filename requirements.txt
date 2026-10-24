@@ -1,0 +1,11 @@
+# Pipeline: download, load and dbt.  pip install -r requirements.txt
+cdsapi>=0.7,<1
+xarray>=2025.1
+netCDF4>=1.7,<2
+numpy>=2.0,<3
+pandas>=2.2,<4
+PyYAML>=6,<7
+psycopg[binary]>=3.2,<4
+python-dotenv[cli]>=1.0,<2
+dbt-core>=1.12,<1.13
+dbt-postgres>=1.11,<1.12

@@ -12,6 +12,6 @@ select
     year,
     count(*) as months
 from monthly
-where year < (select max(year) from monthly)
+where year < (select max(latest.year) from monthly as latest)
 group by grid_point_id, year
 having count(*) <> 12

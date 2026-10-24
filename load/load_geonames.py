@@ -25,6 +25,7 @@ log = logging.getLogger("load")
 
 DEFAULT_CONFIG = Path("config/pipeline.yml")
 
+# fmt: off
 # file name -> (raw table, column names in file order, as in the GeoNames readme)
 FILES = {
     "cities1000.txt": ("raw.geonames_cities", [
@@ -43,6 +44,7 @@ FILES = {
         "neighbours", "equivalent_fips_code",
     ]),
 }
+# fmt: on
 
 
 def read_geonames(path: Path, columns: list[str]) -> pd.DataFrame:
@@ -92,8 +94,7 @@ def main() -> None:
     missing = [name for name in FILES if not (geo_dir / name).exists()]
     if missing:
         raise SystemExit(
-            f"Missing in {geo_dir}: {', '.join(missing)}. "
-            "Run extract/download_geonames.py first."
+            f"Missing in {geo_dir}: {', '.join(missing)}. Run extract/download_geonames.py first."
         )
 
     with connect() as conn:

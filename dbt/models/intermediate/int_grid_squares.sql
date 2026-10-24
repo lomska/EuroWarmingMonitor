@@ -15,19 +15,19 @@ shaped as (
         lat,
         lon,
         land_fraction,
-        land_fraction >= 0.5                          as is_land,
-        st_setsrid(st_makepoint(lon, lat), 4326)      as geom,
+        land_fraction >= 0.5                     as is_land,
+        st_setsrid(st_makepoint(lon, lat), 4326) as geom,
         st_makeenvelope(
             lon - {{ half }}, lat - {{ half }},
             lon + {{ half }}, lat + {{ half }},
             4326
-        )                                             as square
+        )                                        as square
     from grid_points
 
 )
 
 select
     *,
-    st_area(square::geography) / 1e6                  as area_km2
+    st_area(square::geography) / 1e6 as area_km2
 
 from shaped

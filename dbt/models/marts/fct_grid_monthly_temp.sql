@@ -16,7 +16,7 @@ with temperatures as (
     select * from {{ ref('stg_era5__t2m_monthly') }}
 
     {% if is_incremental() %}
-    where loaded_at > (select max(source_loaded_at) from {{ this }})
+        where loaded_at > (select max(existing.source_loaded_at) from {{ this }} as existing)
     {% endif %}
 
 )

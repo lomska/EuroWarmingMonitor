@@ -11,11 +11,11 @@ windowed as (
 
     select
         grid_point_id,
-        year                                as window_end_year,
-        avg(temp_c)             over w      as avg_temp_c,
-        count(*)                over w      as years_in_window,
-        min(year)               over w      as window_start_year,
-        bool_or(is_preliminary) over w      as is_preliminary
+        year                           as window_end_year,
+        avg(temp_c) over w             as avg_temp_c,
+        count(*) over w                as years_in_window,
+        min(year) over w               as window_start_year,
+        bool_or(is_preliminary) over w as is_preliminary
     from annual
     window w as (
         partition by grid_point_id

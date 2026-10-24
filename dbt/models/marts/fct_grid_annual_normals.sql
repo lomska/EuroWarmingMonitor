@@ -10,16 +10,16 @@ select
     grid_point_id,
     avg(temp_c) filter (
         where year between {{ var('baseline_start') }} and {{ var('baseline_end') }}
-    )                                                   as normal_c,
+    ) as normal_c,
     avg(temp_c) filter (
         where year between {{ var('early_baseline_start') }} and {{ var('early_baseline_end') }}
-    )                                                   as early_normal_c,
+    ) as early_normal_c,
     avg(temp_c) filter (
         where year between {{ var('baseline_start') }} and {{ var('baseline_end') }}
     )
     - avg(temp_c) filter (
         where year between {{ var('early_baseline_start') }} and {{ var('early_baseline_end') }}
-    )                                                   as change_c
+    ) as change_c
 
 from annual
 group by grid_point_id

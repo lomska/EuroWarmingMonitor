@@ -137,14 +137,23 @@ def main() -> None:
     todo = [(path, req) for path, req in jobs if not path.exists()]
     log.info(
         "%s: %d files planned, %d already on disk, %d to download, %d outdated",
-        cfg["study_area"]["name"], len(jobs), len(jobs) - len(todo), len(todo), len(stale),
+        cfg["study_area"]["name"],
+        len(jobs),
+        len(jobs) - len(todo),
+        len(todo),
+        len(stale),
     )
     if args.dry_run:
         for path in stale:
             log.info("would remove outdated %s", path.name)
         for path, req in todo:
-            log.info("would download %s (%s, %d years x %d months)",
-                     path.name, req["variable"][0], len(req["year"]), len(req["month"]))
+            log.info(
+                "would download %s (%s, %d years x %d months)",
+                path.name,
+                req["variable"][0],
+                len(req["year"]),
+                len(req["month"]),
+            )
         return
 
     for path in stale:

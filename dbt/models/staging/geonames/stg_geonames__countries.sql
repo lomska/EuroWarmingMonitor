@@ -7,7 +7,7 @@ with source as (
 )
 
 select
-    iso        as country_code,
-    country    as country_name
+    iso     as country_code,
+    country as country_name
 
 from source

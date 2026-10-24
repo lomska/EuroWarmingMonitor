@@ -1,0 +1,8 @@
+# Pipeline plus the checks run before each commit and in CI.
+#   pip install -r requirements-dev.txt
+#   pre-commit install
+-r requirements.txt
+pre-commit>=4,<5
+ruff==0.17.1
+sqlfluff==4.4.0
+sqlfluff-templater-dbt==4.4.0

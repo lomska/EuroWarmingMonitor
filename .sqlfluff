@@ -1,0 +1,33 @@
+# SQLFluff settings for the dbt models and tests: python pipeline.py lint
+# runs it via pre-commit. The dbt templater compiles each model with dbt first,
+# so it needs the database running and the settings from .env.
+
+[sqlfluff]
+dialect = postgres
+templater = dbt
+max_line_length = 100
+# ST06: column order follows meaning, not type; RF04: month, year and days are
+# column names on purpose; AM04: select * from one upstream model is fine
+exclude_rules = ST06, RF04, AM04
+
+[sqlfluff:templater:dbt]
+project_dir = dbt
+profiles_dir = dbt
+
+[sqlfluff:indentation]
+implicit_indents = allow
+
+[sqlfluff:rules:capitalisation.keywords]
+capitalisation_policy = lower
+[sqlfluff:rules:capitalisation.functions]
+extended_capitalisation_policy = lower
+[sqlfluff:rules:capitalisation.literals]
+capitalisation_policy = lower
+[sqlfluff:rules:capitalisation.types]
+extended_capitalisation_policy = lower
+
+# Aliases lined up in a column ("expression    as name") are allowed
+[sqlfluff:layout:type:alias_expression]
+spacing_before = align
+align_within = select_clause
+align_scope = bracketed

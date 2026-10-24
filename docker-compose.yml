@@ -1,4 +1,5 @@
 # Postgres 17 + PostGIS, built from docker/Dockerfile. Start: docker compose up -d
+# After changing anything in docker/: docker compose up -d --build
 name: tempradar
 
 services:
@@ -21,9 +22,10 @@ services:
     ports:
       - "${POSTGRES_PORT:-5432}:5432"   # set POSTGRES_PORT in .env if 5432 is taken
 
+    # docker/init/01_init.sh is built into the image; it runs only on an empty
+    # volume (start over: docker compose down -v)
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./docker/init:/docker-entrypoint-initdb.d:ro # runs only on an empty volume (reset: docker compose down -v)
 
     # Docker's 64 MB default is too small for parallel queries
     shm_size: 1gb
@@ -40,9 +42,10 @@ services:
       - -c
       - effective_cache_size=3GB
 
+    # -h 127.0.0.1: not ready until the setup script has finished
     # $$ = a literal $ for the container's shell
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10

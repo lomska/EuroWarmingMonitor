@@ -27,28 +27,32 @@ def record(label: str) -> None:
     for r in results["results"]:
         if not r["unique_id"].startswith("model."):
             continue
-        rows.append({
-            "label": label,
-            "recorded_at": datetime.now().isoformat(timespec="seconds"),
-            "model": r["unique_id"].split(".")[-1],
-            "status": r["status"],
-            "seconds": round(r["execution_time"], 2),
-            "rows": (r.get("adapter_response") or {}).get("rows_affected", ""),
-        })
+        rows.append(
+            {
+                "label": label,
+                "recorded_at": datetime.now().isoformat(timespec="seconds"),
+                "model": r["unique_id"].split(".")[-1],
+                "status": r["status"],
+                "seconds": round(r["execution_time"], 2),
+                "rows": (r.get("adapter_response") or {}).get("rows_affected", ""),
+            }
+        )
     if not rows:
         raise SystemExit("No model results in run_results.json; run dbt build first.")
 
     new_file = not CSV_FILE.exists()
     with CSV_FILE.open("a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=FIELDS)
+        writer = csv.DictWriter(f, fieldnames=FIELDS, lineterminator="\n")
         if new_file:
             writer.writeheader()
         writer.writerows(rows)
 
     rows.sort(key=lambda r: r["seconds"], reverse=True)
     total = sum(r["seconds"] for r in rows)
-    print(f"{label}: {len(rows)} models, {total:.1f} s of model time "
-          f"(whole command: {results['elapsed_time']:.1f} s)")
+    print(
+        f"{label}: {len(rows)} models, {total:.1f} s of model time "
+        f"(whole command: {results['elapsed_time']:.1f} s)"
+    )
     for r in rows[:10]:
         print(f"  {r['seconds']:>8.2f} s  {r['model']}  ({r['rows']} rows)")
     print(f"Saved to {CSV_FILE}")

@@ -1,0 +1,39 @@
+# Checks that run on every git commit. Set up once: pre-commit install
+# Check every file:                         pre-commit run --all-files
+# ruff and SQLFluff run from the active .venv (requirements-dev.txt).
+# SQLFluff compiles the models with dbt, so the database must be running.
+
+exclude: ^(docs/index\.html|perf/explain_.*)$
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-yaml
+      - id: check-added-large-files
+        args: [--maxkb=5000]
+
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: ruff check --fix
+        language: system
+        types: [python]
+
+      - id: ruff-format
+        name: ruff format
+        entry: ruff format
+        language: system
+        types: [python]
+
+      - id: sqlfluff-lint
+        name: sqlfluff lint (dbt models and tests)
+        entry: dotenv -f .env run -- sqlfluff lint
+        language: system
+        files: ^dbt/(models|tests)/.*\.sql$
+        require_serial: true

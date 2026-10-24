@@ -1,0 +1,21 @@
+# Settings for the CI run: a 3 x 3 block of grid points around Tbilisi, filled
+# with made-up temperatures by ci/make_fixture.py instead of downloads.
+#   python ci/make_fixture.py
+#   python pipeline.py load transform docs --config ci/pipeline.yml --target ci
+
+study_area:
+  name: ci
+  area: [42.0, 44.5, 41.5, 45.0]   # [North, West, South, East]
+
+period:
+  start_year: 1940
+  end_month: "2025-12"
+
+load:
+  months_per_batch: 120
+
+geonames:
+  dir: data/raw/ci/geonames
+
+paths:
+  raw_dir: data/raw

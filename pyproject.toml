@@ -1,0 +1,14 @@
+# Tool settings. Python dependencies are in requirements.txt and requirements-dev.txt.
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["dbt/dbt_packages"]
+
+[tool.ruff.lint]
+# pycodestyle, pyflakes, import order, pyupgrade, bugbear
+select = ["E", "W", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.isort]
+# load/common.py is imported as "common" by the scripts next to it
+known-first-party = ["common"]

@@ -20,10 +20,10 @@ select
     monthly.month,
     monthly.temp_c,
     normals.normal_c,
-    monthly.temp_c - normals.normal_c   as anomaly_c,
+    monthly.temp_c - normals.normal_c as anomaly_c,
     monthly.is_preliminary
 
 from monthly
 inner join normals
-    on  normals.grid_point_id = monthly.grid_point_id
-    and normals.month = monthly.month
+    on monthly.grid_point_id = normals.grid_point_id
+        and monthly.month = normals.month

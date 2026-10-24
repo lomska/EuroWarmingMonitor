@@ -34,7 +34,7 @@ cities_in_area as (
     from cities
     cross join coverage
     where cities.lat between coverage.south and coverage.north
-      and cities.lon between coverage.west and coverage.east
+        and cities.lon between coverage.west and coverage.east
 
 )
 
@@ -60,9 +60,12 @@ cross join lateral (
             grid_points.lat,
             grid_points.lon,
             grid_points.geom,
-            grid_points.geom <-> st_setsrid(st_makepoint(cities_in_area.lon, cities_in_area.lat), 4326) as dist
+            grid_points.geom
+            <-> st_setsrid(st_makepoint(cities_in_area.lon, cities_in_area.lat), 4326) as dist
         from grid_points
-        order by grid_points.geom <-> st_setsrid(st_makepoint(cities_in_area.lon, cities_in_area.lat), 4326)
+        order by
+            grid_points.geom
+            <-> st_setsrid(st_makepoint(cities_in_area.lon, cities_in_area.lat), 4326)
         limit 4
     ) as nearest_four
     -- a place exactly on a border goes to the southern, then western, square

@@ -41,19 +41,22 @@ def month_range(ds: xr.Dataset) -> tuple[date, date]:
 
 # --- loading one file ----------------------------------------------------------
 
+
 def t2m_rows(ds: xr.Dataset, months: slice, source_file: str) -> pd.DataFrame:
     """Reshape a block of months from grid (time x lat x lon) to long rows."""
     block = ds.isel(valid_time=months)
     df = block["t2m"].to_dataframe().reset_index()
     expver = block["expver"].to_series() if "expver" in block.coords else None
-    return pd.DataFrame({
-        "lat": df["latitude"],
-        "lon": df["longitude"],
-        "valid_month": df["valid_time"].dt.date,
-        "t2m_k": df["t2m"],
-        "expver": df["valid_time"].map(expver) if expver is not None else None,
-        "source_file": source_file,
-    })
+    return pd.DataFrame(
+        {
+            "lat": df["latitude"],
+            "lon": df["longitude"],
+            "valid_month": df["valid_time"].dt.date,
+            "t2m_k": df["t2m"],
+            "expver": df["valid_time"].map(expver) if expver is not None else None,
+            "source_file": source_file,
+        }
+    )
 
 
 def load_t2m_file(conn, path: Path, checksum: str, months_per_batch: int) -> int:
@@ -64,8 +67,7 @@ def load_t2m_file(conn, path: Path, checksum: str, months_per_batch: int) -> int
 
         # Remove this file's earlier rows; the date range limits it to its partitions
         conn.execute(
-            f"DELETE FROM {T2M_TABLE} WHERE source_file = %s "
-            "AND valid_month BETWEEN %s AND %s",
+            f"DELETE FROM {T2M_TABLE} WHERE source_file = %s AND valid_month BETWEEN %s AND %s",
             (path.name, first, last),
         )
 
@@ -91,12 +93,14 @@ def load_lsm_file(conn, path: Path, checksum: str) -> int:
         if "valid_time" in lsm.dims:  # the mask comes as a single month
             lsm = lsm.isel(valid_time=0)
         df = lsm.to_dataframe().reset_index()
-        rows = pd.DataFrame({
-            "lat": df["latitude"],
-            "lon": df["longitude"],
-            "lsm": df["lsm"],
-            "source_file": path.name,
-        })
+        rows = pd.DataFrame(
+            {
+                "lat": df["latitude"],
+                "lon": df["longitude"],
+                "lsm": df["lsm"],
+                "source_file": path.name,
+            }
+        )
         conn.execute(f"DELETE FROM {LSM_TABLE}")
         with conn.cursor().copy(
             f"COPY {LSM_TABLE} (lat, lon, lsm, source_file) FROM STDIN (FORMAT csv)"
@@ -113,8 +117,7 @@ def remove_outdated(conn, files_on_disk: set[str]) -> None:
     ..._202601_202610.nc exists); this keeps the database in step with that.
     """
     logged = conn.execute(
-        "SELECT source_file, first_month, last_month FROM raw._load_log "
-        "WHERE target_table = %s",
+        "SELECT source_file, first_month, last_month FROM raw._load_log WHERE target_table = %s",
         (T2M_TABLE,),
     ).fetchall()
     for source_file, first, last in logged:
@@ -122,8 +125,7 @@ def remove_outdated(conn, files_on_disk: set[str]) -> None:
             continue
         with conn.transaction():
             cur = conn.execute(
-                f"DELETE FROM {T2M_TABLE} WHERE source_file = %s "
-                "AND valid_month BETWEEN %s AND %s",
+                f"DELETE FROM {T2M_TABLE} WHERE source_file = %s AND valid_month BETWEEN %s AND %s",
                 (source_file, first, last),
             )
             conn.execute("DELETE FROM raw._load_log WHERE source_file = %s", (source_file,))
@@ -140,11 +142,17 @@ def check_totals(conn, cfg: dict) -> None:
     status = "OK" if rows == expected else "MISMATCH"
     log.info(
         "%s: %s rows in %s, expected %s (%s grid points x %s months)",
-        status, f"{rows:,}", T2M_TABLE, f"{expected:,}", f"{points:,}", months,
+        status,
+        f"{rows:,}",
+        T2M_TABLE,
+        f"{expected:,}",
+        f"{points:,}",
+        months,
     )
 
 
 # --- main ----------------------------------------------------------------------
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
