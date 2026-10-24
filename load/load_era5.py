@@ -155,7 +155,7 @@ def main() -> None:
     setup_logging()
 
     cfg = yaml.safe_load(args.config.read_text(encoding="utf-8"))
-    raw_dir = Path(cfg["paths"]["raw_dir"])
+    raw_dir = Path(cfg["paths"]["raw_dir"]) / cfg["study_area"]["name"]
     months_per_batch = cfg.get("load", {}).get("months_per_batch", 12)
 
     t2m_files = sorted(raw_dir.glob("era5_t2m_*.nc"))

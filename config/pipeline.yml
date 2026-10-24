@@ -1,9 +1,12 @@
 # Settings shared by the extract and load scripts.
 
+# Each area downloads into data/raw/<name>/. After switching areas, run both
+# loaders and then: dbt build --full-refresh
 study_area:
-  name: caucasus
+  name: europe
   # Bounding box in degrees, the order the CDS API expects: [North, West, South, East]
-  area: [48, 36, 36, 52]
+  area: [72, -25, 35, 45]
+  # Caucasus test box:  name: caucasus,  area: [48, 36, 36, 52]
 
 period:
   start_year: 1940
