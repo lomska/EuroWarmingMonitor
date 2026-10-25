@@ -18,6 +18,7 @@ import streamlit as st
 from dotenv import load_dotenv
 
 import charts
+import data
 from data import BASES, SQL, map_sql, open_source
 
 load_dotenv()
@@ -27,7 +28,7 @@ st.set_page_config(page_title="Euro Warming Monitor", page_icon="🌡️", layou
 # --- data, cached ------------------------------------------------------------------
 
 
-# Once per app start; from a web address, this is when the data is downloaded
+# Once per app start (files from a web address are downloaded before, with a progress bar)
 @st.cache_resource(show_spinner="Loading the data…")
 def source():
     return open_source()
@@ -145,6 +146,36 @@ def period_label(month: int, year: int) -> str:
     return str(year) if month == 0 else f"{pd.Timestamp(2000, month, 1):%B} {year}"
 
 
+# --- header ---------------------------------------------------------------------------
+
+st.title("Euro Warming Monitor")
+st.write(
+    "Compare current monthly and annual temperatures with their historical values for any "
+    "location in Europe."
+)
+
+# Less empty space above the title, so the map fits on a laptop screen, and the map's
+# home button placed (Streamlit has no setting for these)
+st.html(
+    """<style>
+    [data-testid="stMainBlockContainer"] { padding-top: 2.5rem; }
+    /* The home button level with Streamlit's fullscreen button over the map */
+    .st-key-home { margin-bottom: -1rem; }
+    /* Figures in columns, so temperatures line up as they change */
+    [data-testid="stMain"] { font-variant-numeric: tabular-nums; }
+    /* The chosen place's name: the largest type on the page after the title */
+    .st-key-place h3 { font-size: 2.25rem; line-height: 1.1; padding-bottom: 0.25rem; }
+    </style>"""
+)
+
+# --- the data: from a web address, downloaded once when the app starts --------------------
+
+if data.needs_download():
+    bar = st.progress(0.0, text="Downloading the data (once, when the app starts)…")
+    data.download(data.parquet_address(), progress=lambda share, text: bar.progress(share, text))
+    bar.empty()
+
+
 # --- what is shown: a place or a grid cell -----------------------------------------
 
 # ("place", city_id) or ("square", grid_point_id). Also kept in the address
@@ -192,28 +223,6 @@ if SELECTION not in st.session_state:
     else:
         st.session_state[SELECTION] = ("place", default_place())
 
-
-# --- header ---------------------------------------------------------------------------
-
-st.title("Euro Warming Monitor")
-st.write(
-    "Compare current monthly and annual temperatures with their historical values for any "
-    "location in Europe."
-)
-
-# Less empty space above the title, so the map fits on a laptop screen, and the map's
-# home button placed (Streamlit has no setting for these)
-st.html(
-    """<style>
-    [data-testid="stMainBlockContainer"] { padding-top: 2.5rem; }
-    /* The home button level with Streamlit's fullscreen button over the map */
-    .st-key-home { margin-bottom: -1rem; }
-    /* Figures in columns, so temperatures line up as they change */
-    [data-testid="stMain"] { font-variant-numeric: tabular-nums; }
-    /* The chosen place's name: the largest type on the page after the title */
-    .st-key-place h3 { font-size: 2.25rem; line-height: 1.1; padding-bottom: 0.25rem; }
-    </style>"""
-)
 
 # --- navigation: month (or year) and base period, for the map and the charts -------------
 

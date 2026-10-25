@@ -17,9 +17,9 @@ from __future__ import annotations
 
 import os
 import re
-import shutil
 import tempfile
 import urllib.request
+from collections.abc import Callable
 from pathlib import Path
 
 import pandas as pd
@@ -235,7 +235,7 @@ def open_source() -> PostgresSource | ParquetSource:
     if kind == "postgres":
         return PostgresSource()
     if kind == "parquet":
-        location = os.getenv("TEMPRADAR_PARQUET", "data/app")
+        location = parquet_address()
         if location.startswith(("http://", "https://")):
             return ParquetSource(download(location))
         # A relative folder is the project's, also when the app runs from another folder
@@ -245,18 +245,55 @@ def open_source() -> PostgresSource | ParquetSource:
     raise ValueError(f"TEMPRADAR_SOURCE must be postgres or parquet, not {kind!r}")
 
 
-def download(address: str) -> str:
+def parquet_address() -> str:
+    """Where the Parquet files are: a folder, or an https:// address."""
+    return os.getenv("TEMPRADAR_PARQUET", "data/app")
+
+
+def needs_download() -> bool:
+    """Whether the app reads Parquet files from an address it hasn't downloaded yet."""
+    address = parquet_address()
+    return (
+        os.getenv("TEMPRADAR_SOURCE") == "parquet"
+        and address.startswith(("http://", "https://"))
+        and address not in _DOWNLOADED
+    )
+
+
+# Address -> local folder: each address is downloaded once per app start
+_DOWNLOADED: dict[str, str] = {}
+
+
+def download(address: str, progress: Callable[[float, str], None] | None = None) -> str:
     """Download every file of an export from `address` (for example a GitHub release:
     https://github.com/<owner>/<repo>/releases/latest/download) into a new temporary
     folder, and return that folder. Reading the files there is as fast as on a laptop;
-    reading them over the internet would make many small requests on every click."""
+    reading them over the internet would make many small requests on every click.
+
+    `progress(share, text)` is called as the files arrive (share from 0 to 1)."""
+    if address in _DOWNLOADED:
+        return _DOWNLOADED[address]
     folder = Path(tempfile.mkdtemp(prefix="tempradar-"))
-    for name in all_parquet_files():
+    names = all_parquet_files()
+    received = 0  # bytes
+    for i, name in enumerate(names):
         part = folder / f"{name}.part"
         with urllib.request.urlopen(f"{address.rstrip('/')}/{name}", timeout=120) as response:
             with part.open("wb") as f:
-                shutil.copyfileobj(response, f, length=1024 * 1024)
+                while block := response.read(1024 * 1024):
+                    f.write(block)
+                    received += len(block)
+                    if progress:
+                        # By file, plus the share of the current one
+                        size = int(response.headers.get("Content-Length") or 0)
+                        within = f.tell() / size if size else 0
+                        progress(
+                            (i + within) / len(names),
+                            f"Downloading the data: {received / 1e6:.0f} MB, "
+                            f"file {i + 1} of {len(names)}",
+                        )
         part.rename(folder / name)  # only complete files get their real name
+    _DOWNLOADED[address] = str(folder)
     return str(folder)
 
 
