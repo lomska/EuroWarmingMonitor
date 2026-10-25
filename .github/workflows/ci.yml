@@ -72,8 +72,11 @@ jobs:
       - name: Make the test data
         run: python ci/make_fixture.py
 
-      - name: Load, build, test, docs
-        run: python pipeline.py load transform test docs --config ci/pipeline.yml --target ci
+      - name: Load, build, test, docs, export
+        run: python pipeline.py load transform test docs export --config ci/pipeline.yml --target ci
+
+      - name: Run the app on the database and on the Parquet files
+        run: python ci/check_app.py
 
       - name: Upload dbt docs and run results
         if: always()

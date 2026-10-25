@@ -1,0 +1,20 @@
+# Streamlit settings for the app (streamlit run app/streamlit_app.py, from the project
+# folder). The "synoptic chart" design: pale chart paper, graphite ink, Barlow.
+# Warmer and colder come from the map's own diverging scale (see app/charts.py), so the
+# page has one colour language.
+
+[theme]
+base = "light"
+backgroundColor = "#E9EEF0"           # chart paper
+secondaryBackgroundColor = "#F7F9F9"  # fields and panels
+textColor = "#18262E"                 # ink
+primaryColor = "#18262E"              # selected month, focus rings: ink, not a hue
+borderColor = "#C3CDD2"
+showWidgetBorder = true
+baseRadius = "4px"
+font = "Barlow:https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&display=swap, sans-serif"
+headingFont = "'Barlow Semi Condensed':https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600&display=swap, sans-serif"
+
+[client]
+# No "Deploy" button or developer options in the top-right menu for visitors
+toolbarMode = "minimal"

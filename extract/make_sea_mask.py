@@ -103,7 +103,8 @@ def main() -> None:
         "features": [{"type": "Feature", "properties": {}, "geometry": json.loads(geometry)}],
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(mask, separators=(",", ":")), encoding="utf-8")
+    # Ending in a newline, as the end-of-file check in pre-commit expects
+    args.out.write_text(json.dumps(mask, separators=(",", ":")) + "\n", encoding="utf-8")
     log.info("wrote %s (%.0f KB)", args.out, args.out.stat().st_size / 1e3)
 
 
