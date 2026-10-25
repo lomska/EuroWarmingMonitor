@@ -1,0 +1,10 @@
+# Only what the app needs, for Streamlit Community Cloud: it reads this file (next to
+# streamlit_app.py) before the repository's requirements.txt, which also has the
+# pipeline's packages. On a laptop, install the root requirements(-dev).txt instead.
+streamlit>=1.66,<2
+altair>=5,<7
+pydeck>=0.9,<1
+duckdb>=1.3,<3
+numpy>=2.0,<3
+pandas>=2.2,<4
+python-dotenv>=1.0,<2

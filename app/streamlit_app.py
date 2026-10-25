@@ -22,6 +22,10 @@ import data
 from data import BASES, SQL, map_sql, open_source
 
 load_dotenv()
+# On Streamlit Community Cloud the settings are the app's secrets, not a .env file.
+# Loading them also sets their top-level values as environment variables, which
+# app/data.py reads; without a secrets file (on a laptop) this does nothing
+st.secrets.load_if_toml_exists()
 st.set_page_config(page_title="Euro Warming Monitor", page_icon="🌡️", layout="wide")
 
 
