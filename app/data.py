@@ -7,13 +7,19 @@ differs, because Postgres uses pg_trgm and DuckDB its own similarity functions.
 Chosen with TEMPRADAR_SOURCE in .env (or in Streamlit secrets):
     postgres  read the marts as the read-only reader role (default)
     parquet   read the files exported by: python pipeline.py export
-              from TEMPRADAR_PARQUET (a folder or an https:// address)
+              from TEMPRADAR_PARQUET: a folder, or an https:// address where the
+              files are published (a GitHub release: export/publish_release.py).
+              Files at an address are downloaded once, when the app starts, and
+              then read from the local disk.
 """
 
 from __future__ import annotations
 
 import os
 import re
+import shutil
+import tempfile
+import urllib.request
 from pathlib import Path
 
 import pandas as pd
@@ -28,10 +34,24 @@ TABLES = [
     "mart_grid_annual_warming_trend",
 ]
 
-# Tables exported as a folder with one file per month (0 = the whole year), so no file
-# comes near GitHub's 100 MB limit: <table>/month_00.parquet ... month_12.parquet
-# (written by export/export_parquet.py)
+# Tables exported as one file per month (0 = the whole year), so no file comes near
+# GitHub's 100 MB limit: <table>_month_00.parquet ... <table>_month_12.parquet, side by
+# side with the others (a GitHub release has no folders). Written by
+# export/export_parquet.py
 SPLIT_BY_MONTH = ["mart_grid_history"]
+
+
+def parquet_files(table: str) -> list[str]:
+    """The file names a table is exported to."""
+    if table in SPLIT_BY_MONTH:
+        return [f"{table}_month_{m:02d}.parquet" for m in range(13)]
+    return [f"{table}.parquet"]
+
+
+def all_parquet_files() -> list[str]:
+    """Every file of an export, as published: the tables and metadata.json."""
+    return [name for table in TABLES for name in parquet_files(table)] + ["metadata.json"]
+
 
 # The project folder (this file is in app/)
 PROJECT = Path(__file__).resolve().parents[1]
@@ -194,19 +214,11 @@ class ParquetSource:
     def __init__(self, location: str) -> None:
         import duckdb
 
-        self.location = location.rstrip("/")
+        self.location = Path(location)
         self.conn = duckdb.connect()
-        if self.location.startswith(("http://", "https://")):
-            self.conn.execute("install httpfs; load httpfs")
         for table in TABLES:
-            if table in SPLIT_BY_MONTH:
-                # Every file named, rather than a folder pattern: an https:// address
-                # can't be listed
-                files = [f"'{self.location}/{table}/month_{m:02d}.parquet'" for m in range(13)]
-                source = f"[{', '.join(files)}]"
-            else:
-                source = f"'{self.location}/{table}.parquet'"
-            self.conn.execute(f"create view {table} as select * from read_parquet({source})")
+            files = ", ".join(f"'{(self.location / f).as_posix()}'" for f in parquet_files(table))
+            self.conn.execute(f"create view {table} as select * from read_parquet([{files}])")
 
     def query(self, sql: str, **params) -> pd.DataFrame:
         # Same :name placeholders as SQLAlchemy; DuckDB writes them $name
@@ -224,11 +236,28 @@ def open_source() -> PostgresSource | ParquetSource:
         return PostgresSource()
     if kind == "parquet":
         location = os.getenv("TEMPRADAR_PARQUET", "data/app")
-        # A relative folder is the project's, also when the app runs from this folder
-        if not location.startswith(("http://", "https://")) and not Path(location).exists():
+        if location.startswith(("http://", "https://")):
+            return ParquetSource(download(location))
+        # A relative folder is the project's, also when the app runs from another folder
+        if not Path(location).exists():
             location = str(PROJECT / location)
         return ParquetSource(location)
     raise ValueError(f"TEMPRADAR_SOURCE must be postgres or parquet, not {kind!r}")
+
+
+def download(address: str) -> str:
+    """Download every file of an export from `address` (for example a GitHub release:
+    https://github.com/<owner>/<repo>/releases/latest/download) into a new temporary
+    folder, and return that folder. Reading the files there is as fast as on a laptop;
+    reading them over the internet would make many small requests on every click."""
+    folder = Path(tempfile.mkdtemp(prefix="tempradar-"))
+    for name in all_parquet_files():
+        part = folder / f"{name}.part"
+        with urllib.request.urlopen(f"{address.rstrip('/')}/{name}", timeout=120) as response:
+            with part.open("wb") as f:
+                shutil.copyfileobj(response, f, length=1024 * 1024)
+        part.rename(folder / name)  # only complete files get their real name
+    return str(folder)
 
 
 def map_sql(base: str) -> str:

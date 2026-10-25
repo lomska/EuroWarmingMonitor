@@ -5,7 +5,8 @@ Each table is copied out of Postgres as CSV (fast, no Python objects per row),
 then converted to Parquet with DuckDB: compressed, temperatures to the hundredth
 of a degree, and sorted by grid square so the app reads only the part it needs.
 The history table is split into one file per month (0 = the whole year), so no
-file comes near GitHub's 100 MB limit.
+file comes near GitHub's 100 MB limit. To publish the files for the deployed app:
+export/publish_release.py.
 
 Usage (from the project folder, with .venv active and the database running):
     python export/export_parquet.py              # writes data/app/
@@ -34,8 +35,9 @@ log = logging.getLogger("export")
 # Rows to leave out, per table (none at the moment): "table": "SQL condition"
 FILTERS: dict[str, str] = {}
 
-# Tables written as a folder of files, one per value of a column: <table>/<column>_NN.parquet
-# (the app's data.py reads the same names)
+# Tables written as one file per value of a column, <table>_<column>_NN.parquet, side by
+# side with the others: a GitHub release has no folders (the app's data.py reads the
+# same names)
 SPLIT = {"mart_grid_history": "month"}
 
 # Temperatures to the hundredth of a degree: stored as whole numbers, which compress
@@ -154,14 +156,11 @@ def export_table(pg, duck, table: str, columns: dict[str, str], out_dir: Path, t
     # One file per value: read the CSV once into DuckDB (on disk, in the temporary
     # folder), then write each part, keeping the rows' order
     column = SPLIT[table]
-    folder = out_dir / table
-    shutil.rmtree(folder, ignore_errors=True)
-    folder.mkdir()
     duck.execute(f"create or replace table split_rows as select * from {rows_csv}")
     csv_path.unlink()
     values = duck.execute(f"select distinct {column} from split_rows order by 1").fetchall()
     for (value,) in values:
-        target = folder / f"{column}_{value:02d}.parquet"
+        target = out_dir / f"{table}_{column}_{value:02d}.parquet"
         duck.execute(
             f"COPY (select * from split_rows where {column} = {value}) "
             f"TO '{target.as_posix()}' {options}"
@@ -173,7 +172,7 @@ def export_table(pg, duck, table: str, columns: dict[str, str], out_dir: Path, t
 
 def size_mb(out_dir: Path, table: str) -> float:
     """A table's file, or its folder of files, in MB."""
-    files = list((out_dir / table).glob("*.parquet")) if table in SPLIT else []
+    files = list(out_dir.glob(f"{table}_{SPLIT[table]}_*.parquet")) if table in SPLIT else []
     files = files or [out_dir / f"{table}.parquet"]
     return sum(f.stat().st_size for f in files) / 1e6
 
@@ -192,11 +191,17 @@ def main() -> None:
     cfg = yaml.safe_load(args.config.read_text(encoding="utf-8"))
     args.out.mkdir(parents=True, exist_ok=True)
 
-    # Remove files of tables the app no longer reads (or that are now split)
+    # Remove files of tables the app no longer reads, and the split tables' old files
+    # (rewritten below, and there may be fewer of them)
+    split_prefixes = tuple(f"{table}_{column}_" for table, column in SPLIT.items())
     for old in args.out.glob("*.parquet"):
-        if old.stem not in EXPORTS or old.stem in SPLIT:
+        if old.stem.startswith(split_prefixes):
+            old.unlink()
+        elif old.stem not in EXPORTS or old.stem in SPLIT:
             old.unlink()
             log.info("removed %s (no longer exported)", old.name)
+    for table in SPLIT:  # the folder an earlier version of this script wrote
+        shutil.rmtree(args.out / table, ignore_errors=True)
 
     with connect() as pg, tempfile.TemporaryDirectory() as tmp:
         # A database file in the temporary folder, so a split table needn't fit in memory
@@ -222,7 +227,7 @@ def main() -> None:
     }
     (args.out / "metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     total = sum(size_mb(args.out, table) for table in EXPORTS)
-    largest = max(p.stat().st_size for p in args.out.rglob("*.parquet")) / 1e6
+    largest = max(p.stat().st_size for p in args.out.glob("*.parquet")) / 1e6
     log.info("wrote %s (%.0f MB in total, largest file %.0f MB)", args.out, total, largest)
 
 

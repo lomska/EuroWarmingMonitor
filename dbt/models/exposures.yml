@@ -1,8 +1,8 @@
 version: 2
 
 exposures:
-  - name: tempradar_app
-    label: TempRadar city climate app
+  - name: euro_warming_monitor
+    label: Euro Warming Monitor app
     type: application
     maturity: low
     description: >

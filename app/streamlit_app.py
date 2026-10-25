@@ -1,5 +1,4 @@
-"""Euro Warming Monitor (the TempRadar project): how has the temperature changed
-where you live?
+"""Euro Warming Monitor: how has the temperature changed where you live?
 
 The "synoptic chart" design: chart paper, graphite ink, Barlow, and warming stripes
 under the history chart (theme in .streamlit/config.toml).
@@ -28,7 +27,8 @@ st.set_page_config(page_title="Euro Warming Monitor", page_icon="🌡️", layou
 # --- data, cached ------------------------------------------------------------------
 
 
-@st.cache_resource
+# Once per app start; from a web address, this is when the data is downloaded
+@st.cache_resource(show_spinner="Loading the data…")
 def source():
     return open_source()
 

@@ -1,4 +1,4 @@
-"""Run the TempRadar pipeline, or any of its steps, with one command.
+"""Run the Euro Warming Monitor pipeline, or any of its steps, with one command.
 
 Steps, in order:
     extract    download ERA5 and GeoNames files            (extract/*.py)
