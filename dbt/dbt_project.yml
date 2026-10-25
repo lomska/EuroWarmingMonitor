@@ -36,10 +36,6 @@ models:
       +schema: marts
       +materialized: table
 
-seeds:
-  tempradar:
-    +schema: marts
-
 data_tests:
   tempradar:
     +store_failures: false

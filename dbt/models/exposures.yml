@@ -6,18 +6,15 @@ exposures:
     type: application
     maturity: low
     description: >
-      Streamlit app: search a city or town, see its grid square's monthly
-      normals, 10-year means, anomalies and warming trend, with an overview
-      map of the squares. Connects as the read-only reader role.
+      Streamlit app: a clickable map of how the latest finished month (or
+      year) compares with a climate normal, and for a searched place or a
+      clicked grid cell its key numbers, warming trend and history. Reads the
+      marts as the read-only reader role, or their Parquet export.
     depends_on:
       - ref('dim_city')
       - ref('dim_grid_point')
-      - ref('dim_calendar_month')
-      - ref('fct_grid_normals')
-      - ref('fct_grid_annual_normals')
-      - ref('fct_grid_rolling_10y')
-      - ref('fct_grid_rolling_10y_annual')
-      - ref('fct_grid_anomaly')
+      - ref('mart_grid_history')
+      - ref('mart_grid_latest_period')
       - ref('mart_grid_warming_trend')
       - ref('mart_grid_annual_warming_trend')
     owner:

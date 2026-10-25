@@ -1,4 +1,4 @@
-# Pipeline: download, load and dbt.  pip install -r requirements.txt
+# Pipeline (download, load, dbt) and the app.  pip install -r requirements.txt
 cdsapi>=0.7,<1
 xarray>=2025.1
 netCDF4>=1.7,<2
@@ -9,3 +9,9 @@ psycopg[binary]>=3.2,<4
 python-dotenv[cli]>=1.0,<2
 dbt-core>=1.12,<1.13
 dbt-postgres>=1.11,<1.12
+# app and Parquet export
+streamlit>=1.66,<2
+altair>=5,<7          # the history chart (also comes with Streamlit)
+pydeck>=0.9,<1
+duckdb>=1.3,<3
+SQLAlchemy>=2.0,<3

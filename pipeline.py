@@ -6,6 +6,7 @@ Steps, in order:
     transform  dbt build: build every model and run its tests
     test       dbt source freshness + dbt test, without rebuilding
     docs       dbt docs as one static page: docs/index.html
+    export     the marts the app reads, as Parquet files in data/app/
     all        extract, load, then transform and docs only if something new was loaded
 
 Usage (from the project folder, with .venv active and the database running):
@@ -38,7 +39,7 @@ DEFAULT_CONFIG = Path("config/pipeline.yml")
 # When the last successful build started from; compared with the load log
 LAST_BUILD_FILE = ROOT / "data" / "last_build.txt"
 
-STEPS = ["extract", "load", "transform", "test", "docs", "all"]
+STEPS = ["extract", "load", "transform", "test", "docs", "export", "all"]
 
 log = logging.getLogger("pipeline")
 
@@ -130,6 +131,10 @@ def docs(args) -> None:
     log.info("docs written to %s", target.relative_to(ROOT))
 
 
+def export(args) -> None:
+    python("export/export_parquet.py", args.config)
+
+
 def run_all(args) -> None:
     extract(args)
     load(args)
@@ -147,6 +152,7 @@ RUNNERS = {
     "transform": transform,
     "test": test,
     "docs": docs,
+    "export": export,
     "all": run_all,
 }
 

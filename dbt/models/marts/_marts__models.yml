@@ -230,42 +230,6 @@ models:
         description: True if any month in the window is preliminary.
         data_type: boolean
 
-  - name: fct_grid_anomaly
-    description: >
-      Each month's temperature minus the grid square's 1991-2020 normal for that
-      calendar month. Positive = warmer than normal.
-    config:
-      indexes:
-        - columns: [grid_point_id, valid_month]
-          unique: true
-      contract:
-        enforced: true
-    data_tests:
-      - dbt_utils.unique_combination_of_columns:
-          arguments:
-            combination_of_columns: [grid_point_id, valid_month]
-    columns:
-      - name: grid_point_id
-        data_type: text
-        constraints:
-          - type: not_null
-      - name: valid_month
-        data_type: date
-      - name: year
-        data_type: integer
-      - name: month
-        data_type: integer
-      - name: temp_c
-        data_type: double precision
-      - name: normal_c
-        data_type: double precision
-      - name: anomaly_c
-        description: Difference from normal in °C.
-        data_type: double precision
-        data_tests: [not_null]
-      - name: is_preliminary
-        data_type: boolean
-
   - name: mart_grid_warming_trend
     description: >
       Linear warming trend per grid square and calendar month over the whole
@@ -444,6 +408,115 @@ models:
       - name: last_year
         data_type: integer
 
+  - name: mart_grid_latest_period
+    description: >
+      The latest finished occurrence of each calendar month (month 1-12) and
+      the latest complete year (month 0) per grid square: its temperature, and
+      how it compares with both climate normals and with the same period a year
+      earlier. In October 2026, September is 2026 but October is 2025.
+      Feeds the app's map and key numbers. {{ doc('climate_normals') }}
+    config:
+      indexes:
+        - columns: [grid_point_id, month]
+          unique: true
+        - columns: [month]
+      contract:
+        enforced: true
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [grid_point_id, month]
+    columns:
+      - name: grid_point_id
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_grid_point')
+                field: grid_point_id
+      - name: month
+        description: Calendar month 1-12, or 0 for the whole year.
+        data_type: integer
+        constraints:
+          - type: not_null
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 12
+      - name: year
+        description: The year of this latest month, or the latest complete year.
+        data_type: integer
+        data_tests: [not_null]
+      - name: temp_c
+        description: Mean temperature of that month or year, °C.
+        data_type: double precision
+        data_tests: [not_null]
+      - name: normal_c
+        description: Mean over the current baseline (default 1991-2020), °C.
+        data_type: double precision
+      - name: early_normal_c
+        description: Mean over the earlier baseline (default 1961-1990), °C.
+        data_type: double precision
+      - name: previous_year_temp_c
+        description: The same month (or the whole year) one year earlier, °C.
+        data_type: double precision
+      - name: change_vs_normal_c
+        description: temp_c minus normal_c.
+        data_type: double precision
+        data_tests: [not_null]
+      - name: change_vs_early_normal_c
+        description: temp_c minus early_normal_c.
+        data_type: double precision
+        data_tests: [not_null]
+      - name: change_vs_previous_year_c
+        description: temp_c minus previous_year_temp_c.
+        data_type: double precision
+      - name: is_preliminary
+        description: True for preliminary ERA5T values. {{ doc('preliminary') }}
+        data_type: boolean
+
+  - name: mart_grid_history
+    description: >
+      Every single year per grid square, for each calendar month (month 1-12)
+      and the whole year (month 0), with the rolling mean of the
+      var('window_years') years ending that year. Feeds the app's history chart:
+      the line and the warming stripes. A view over the indexed fct tables, so
+      it takes no space and no build time; its columns are tested where they
+      are made (fct_grid_monthly_temp, fct_grid_annual_temp and the rolling
+      models), and the join by the unit test below. {{ doc('preliminary') }}
+    config:
+      materialized: view
+      contract:
+        enforced: true
+    columns:
+      - name: grid_point_id
+        data_type: text
+      - name: month
+        description: Calendar month 1-12, or 0 for the whole year.
+        data_type: integer
+      - name: year
+        data_type: integer
+      - name: temp_c
+        description: Mean temperature of that month or year, °C.
+        data_type: double precision
+      - name: is_preliminary
+        description: True when temp_c uses preliminary ERA5T data.
+        data_type: boolean
+      - name: rolling_start_year
+        description: First year of the rolling window that ends this year.
+        data_type: integer
+      - name: rolling_avg_c
+        description: >
+          Mean of the var('window_years') values ending this year, °C. Empty
+          for the first years, before a complete window.
+        data_type: double precision
+      - name: rolling_is_preliminary
+        description: True when any year in the window is preliminary.
+        data_type: boolean
+
 unit_tests:
   - name: rolling_window_keeps_only_complete_windows
     description: >
@@ -495,3 +568,58 @@ unit_tests:
     expect:
       rows:
         - {grid_point_id: 'p', year: 2001, temp_c: 31.0, is_preliminary: true}
+
+  - name: history_joins_each_year_to_the_window_ending_then
+    description: >
+      Each single year gets the rolling mean of the window ending that year;
+      the first year, with no complete window yet, gets none. The whole year
+      comes as month 0 the same way.
+    model: mart_grid_history
+    given:
+      - input: ref('fct_grid_monthly_temp')
+        rows:
+          - {grid_point_id: 'p', month: 9, year: 2025, temp_c: 20.0, is_preliminary: false}
+          - {grid_point_id: 'p', month: 9, year: 2026, temp_c: 21.0, is_preliminary: true}
+      - input: ref('fct_grid_rolling_10y')
+        rows:
+          - {grid_point_id: 'p', month: 9, window_end_year: 2026, avg_temp_c: 19.5, is_preliminary: true, window_start_year: 2017}
+      - input: ref('fct_grid_annual_temp')
+        rows:
+          - {grid_point_id: 'p', year: 2025, temp_c: 11.0, is_preliminary: false}
+      - input: ref('fct_grid_rolling_10y_annual')
+        rows:
+          - {grid_point_id: 'p', window_end_year: 2025, avg_temp_c: 10.4, is_preliminary: false, window_start_year: 2016}
+    expect:
+      rows:
+        - {grid_point_id: 'p', month: 0, year: 2025, temp_c: 11.0, is_preliminary: false, rolling_start_year: 2016, rolling_avg_c: 10.4, rolling_is_preliminary: false}
+        - {grid_point_id: 'p', month: 9, year: 2025, temp_c: 20.0, is_preliminary: false, rolling_start_year: null, rolling_avg_c: null, rolling_is_preliminary: null}
+        - {grid_point_id: 'p', month: 9, year: 2026, temp_c: 21.0, is_preliminary: true, rolling_start_year: 2017, rolling_avg_c: 19.5, rolling_is_preliminary: true}
+
+  - name: latest_period_uses_each_months_latest_year
+    description: >
+      With data until September 2026, September is 2026 but October is 2025,
+      the year is 2025, and each is compared with the year before.
+    model: mart_grid_latest_period
+    given:
+      - input: ref('fct_grid_monthly_temp')
+        rows:
+          - {grid_point_id: 'p', valid_month: '2025-09-01', year: 2025, month: 9, temp_c: 20.0, is_preliminary: false}
+          - {grid_point_id: 'p', valid_month: '2025-10-01', year: 2025, month: 10, temp_c: 12.0, is_preliminary: false}
+          - {grid_point_id: 'p', valid_month: '2024-10-01', year: 2024, month: 10, temp_c: 11.0, is_preliminary: false}
+          - {grid_point_id: 'p', valid_month: '2026-09-01', year: 2026, month: 9, temp_c: 21.5, is_preliminary: true}
+      - input: ref('fct_grid_annual_temp')
+        rows:
+          - {grid_point_id: 'p', year: 2024, temp_c: 10.0, is_preliminary: false}
+          - {grid_point_id: 'p', year: 2025, temp_c: 10.5, is_preliminary: false}
+      - input: ref('fct_grid_normals')
+        rows:
+          - {grid_point_id: 'p', month: 9, normal_c: 20.0, early_normal_c: 19.0}
+          - {grid_point_id: 'p', month: 10, normal_c: 11.5, early_normal_c: 11.0}
+      - input: ref('fct_grid_annual_normals')
+        rows:
+          - {grid_point_id: 'p', normal_c: 9.5, early_normal_c: 9.0}
+    expect:
+      rows:
+        - {grid_point_id: 'p', month: 0, year: 2025, change_vs_normal_c: 1.0, change_vs_early_normal_c: 1.5, change_vs_previous_year_c: 0.5}
+        - {grid_point_id: 'p', month: 9, year: 2026, change_vs_normal_c: 1.5, change_vs_early_normal_c: 2.5, change_vs_previous_year_c: 1.5}
+        - {grid_point_id: 'p', month: 10, year: 2025, change_vs_normal_c: 0.5, change_vs_early_normal_c: 1.0, change_vs_previous_year_c: 1.0}

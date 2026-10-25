@@ -10,5 +10,5 @@ extend-exclude = ["dbt/dbt_packages"]
 select = ["E", "W", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.isort]
-# load/common.py is imported as "common" by the scripts next to it
-known-first-party = ["common"]
+# Modules imported by the scripts next to them: load/common.py, app/charts.py, app/data.py
+known-first-party = ["common", "charts", "data"]
