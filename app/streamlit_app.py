@@ -500,10 +500,14 @@ with cell_part:
 # --- credits -----------------------------------------------------------------------------
 
 st.divider()
+CC_BY = "[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)"
 st.caption(
-    "Data: ERA5 monthly averaged reanalysis, 2 m temperature (Hersbach et al., 2023, "
-    "Copernicus Climate Change Service Climate Data Store, DOI 10.24381/cds.f17050d7). "
-    "Contains modified Copernicus Climate Change Service information. "
-    "Places: GeoNames (geonames.org, CC BY 4.0). "
+    "Data: [ERA5 monthly averaged reanalysis](https://doi.org/10.24381/cds.f17050d7), "
+    "2 m temperature (Hersbach et al., 2023), from the Copernicus Climate Change Service "
+    f"(C3S) Climate Data Store, licensed under {CC_BY}. Contains modified Copernicus "
+    "Climate Change Service information: the monthly values are converted to °C and "
+    "turned into per-cell climate normals, annual and 10-year averages and trends. "
+    f"Places: [GeoNames](https://www.geonames.org), {CC_BY}. "
+    "Coastlines and lakes: [Natural Earth](https://www.naturalearthdata.com) (public domain). "
     "Built with Python, PostgreSQL/PostGIS and dbt."
 )

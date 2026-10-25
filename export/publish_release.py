@@ -31,6 +31,26 @@ from data import all_parquet_files  # noqa: E402
 
 log = logging.getLogger("publish")
 
+# The release's description. The files can be downloaded on their own, so they carry
+# their own credits and licences (CC BY 4.0 asks for credit, a licence link, and a note
+# of what was changed)
+NOTES = """Parquet export for the Euro Warming Monitor app: {area}, ERA5 data until {until}, \
+exported {exported}.
+
+**Sources and licences**
+
+- Temperatures: ERA5 monthly averaged reanalysis, 2 m temperature (Hersbach et al., 2023), \
+Copernicus Climate Change Service (C3S) Climate Data Store, \
+https://doi.org/10.24381/cds.f17050d7, licensed under \
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+  Contains modified Copernicus Climate Change Service information: the monthly values are \
+converted to °C and turned into per-cell climate normals, annual and 10-year averages, \
+changes and trends. Neither the European Commission nor ECMWF is responsible \
+for any use of this information.
+- Places (`dim_city`): [GeoNames](https://www.geonames.org), licensed under \
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); names joined to grid cells.
+"""
+
 
 def run(command: list[str], dry_run: bool) -> None:
     log.info("%s", " ".join(command[:6]) + (" ..." if len(command) > 6 else ""))
@@ -66,9 +86,8 @@ def main() -> None:
         # The same data again: replace the release's files
         run(["gh", "release", "upload", tag, *paths, "--clobber"], args.dry_run)
     else:
-        notes = (
-            f"Parquet export for the Euro Warming Monitor app: {meta['study_area']}, "
-            f"ERA5 data until {until:%B %Y}, exported {meta['exported_at']}."
+        notes = NOTES.format(
+            area=meta["study_area"], until=f"{until:%B %Y}", exported=meta["exported_at"]
         )
         title = f"Data until {until:%B %Y}"
         options = ["--title", title, "--notes", notes, "--latest"]
