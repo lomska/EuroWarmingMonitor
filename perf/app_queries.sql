@@ -4,50 +4,57 @@
 --   Get-Content perf\app_queries.sql | docker compose exec -T db psql -U postgres -d climate > perf\explain_<label>.txt
 
 \pset pager off
-\set place 'Tbilisi'
+-- 1-4 are the queries the app runs (app/data.py), for its default place, Paris;
+-- 5-6 are the pipeline's. Numbers measured on the queries before these (the
+-- rolling tables, read directly) are in explain_europe-before/after.txt.
+\set place 'Paris'
+set pg_trgm.word_similarity_threshold = 0.5;
 
-\echo '==== 1. City search with a typo ("Tbilsi")'
+\echo '==== 1. Place search with a typo ("Tbilsi"), as the app does it'
 EXPLAIN (ANALYZE, BUFFERS)
-select city_id, display_name, population
-from marts.dim_city
-where city_name % 'Tbilsi' or alternate_names ilike '%Tbilsi%'
-order by similarity(city_name, 'Tbilsi') desc, population desc nulls last
-limit 10;
+select c.city_id, c.display_name, c.population,
+       greatest(word_similarity('Tbilsi', c.city_name), coalesce(a.score, 0)) as score
+from marts.dim_city as c
+left join lateral (
+    select alias, word_similarity('Tbilsi', alias) as score
+    from unnest(string_to_array(c.alternate_names, ',')) as alias
+    order by score desc
+    limit 1
+) as a on true
+where 'Tbilsi' <% c.city_name or 'Tbilsi' <% c.alternate_names
+order by score desc, c.population desc nulls last
+limit 15;
 
-\echo '==== 2. Monthly temperatures of one square (largest mart)'
+\echo '==== 2. History of one grid cell: every year with its 10-year average (a view)'
 EXPLAIN (ANALYZE, BUFFERS)
-select valid_month, temp_c
-from marts.fct_grid_monthly_temp
+select month, year, temp_c, is_preliminary,
+       rolling_start_year, rolling_avg_c, rolling_is_preliminary
+from marts.mart_grid_history
 where grid_point_id = (select grid_point_id from marts.dim_city
                        where city_name = :'place' order by population desc nulls last limit 1)
-order by valid_month;
+order by month, year;
 
-\echo '==== 3. Monthly 10-year means of one square'
+\echo '==== 3. The three numbers of one grid cell: latest periods and trends'
 EXPLAIN (ANALYZE, BUFFERS)
-select month, window_end_year, avg_temp_c
-from marts.fct_grid_rolling_10y
-where grid_point_id = (select grid_point_id from marts.dim_city
-                       where city_name = :'place' order by population desc nulls last limit 1);
+select l.month, l.year, l.temp_c, l.change_vs_normal_c, t.warming_c_per_decade
+from marts.mart_grid_latest_period as l
+left join marts.mart_grid_warming_trend as t
+    on t.grid_point_id = l.grid_point_id and t.month = l.month
+where l.grid_point_id = (select grid_point_id from marts.dim_city
+                         where city_name = :'place' order by population desc nulls last limit 1);
 
-\echo '==== 4. Annual 10-year means of one square'
+\echo '==== 4. Map: the change of every cell in September against 1991-2020'
 EXPLAIN (ANALYZE, BUFFERS)
-select window_end_year, avg_temp_c
-from marts.fct_grid_rolling_10y_annual
-where grid_point_id = (select grid_point_id from marts.dim_city
-                       where city_name = :'place' order by population desc nulls last limit 1);
+select g.lat, g.lon, m.change_vs_normal_c as value, m.year
+from marts.mart_grid_latest_period as m
+inner join marts.dim_grid_point as g on m.grid_point_id = g.grid_point_id
+where m.month = 9;
 
-\echo '==== 5. Map: July warming per square, with the square polygons'
-EXPLAIN (ANALYZE, BUFFERS)
-select g.grid_point_id, g.square, t.warming_c_per_decade
-from marts.mart_grid_warming_trend t
-join marts.dim_grid_point g using (grid_point_id)
-where t.month = 7;
-
-\echo '==== 6. Raw data for one month (partition pruning)'
+\echo '==== 5. Raw data for one month (partition pruning)'
 EXPLAIN (ANALYZE, BUFFERS)
 select avg(t2m_k) from raw.era5_t2m_monthly where valid_month = '1965-07-01';
 
-\echo '==== 7. Rows an incremental dbt run must find (filter on loaded_at)'
+\echo '==== 6. Rows an incremental dbt run must find (filter on loaded_at)'
 EXPLAIN (ANALYZE, BUFFERS)
 select count(*) from raw.era5_t2m_monthly
 where loaded_at > (select max(source_loaded_at) from marts.fct_grid_monthly_temp);
