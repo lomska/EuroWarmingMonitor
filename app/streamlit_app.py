@@ -1,7 +1,7 @@
 """Euro Warming Monitor: how has the temperature changed where you live?
 
-The "synoptic chart" design: chart paper, graphite ink, Barlow, and warming stripes
-under the history chart (theme in .streamlit/config.toml).
+The "synoptic chart" design: chart paper, graphite ink, IBM Plex Sans (Plex Mono for
+figures), and warming stripes under the history chart (theme in .streamlit/config.toml).
 
 Run from the project folder (with .venv active):
     streamlit run app/streamlit_app.py
@@ -26,7 +26,9 @@ load_dotenv()
 # Loading them also sets their top-level values as environment variables, which
 # app/data.py reads; without a secrets file (on a laptop) this does nothing
 st.secrets.load_if_toml_exists()
-st.set_page_config(page_title="Euro Warming Monitor", page_icon="🌡️", layout="wide")
+st.set_page_config(
+    page_title="Euro Warming Monitor", page_icon=":material/thermostat:", layout="wide"
+)
 
 
 # --- data, cached ------------------------------------------------------------------
@@ -110,19 +112,28 @@ def on_phone() -> bool:
     return "Mobi" in (st.context.headers.get("User-Agent") or "")
 
 
+# Figures (the big numbers and their changes): the theme's codeFont, loaded by Streamlit
+MONO = "'IBM Plex Mono', monospace"
+
+
 def change_text(change: float, base: str = "", suffix: str = "", digits: int = 1) -> str:
-    """A change as coloured text: rust with ▲ when warmer, blue with ▼ when colder (the
-    chart's colours), graphite with no arrow when it rounds to zero. Followed by
-    "vs <base>", or by `suffix` when given."""
+    """A change as its signed number in the chart's colours (rust when warmer, blue when
+    colder, graphite when it rounds to zero), with no arrow: the sign and colour say it.
+    Followed in graphite by "vs <base>", or by `suffix` when given."""
     change = round(change, digits) + 0.0  # + 0.0 turns -0.0 into 0.0
     if change > 0:
-        text, colour = f"▲ {signed(change, digits)}", charts.WARMER
+        colour = charts.WARMER
     elif change < 0:
-        text, colour = f"▼ {signed(change, digits)}", charts.COLDER
+        colour = charts.COLDER
     else:
-        text, colour = signed(change, digits), charts.NEUTRAL
+        colour = charts.NEUTRAL
+    number = f"±{0:.{digits}f}°" if change == 0 else f"{change:+.{digits}f}°"
     after = suffix or f"vs {base}"
-    return f"<span style='font-size:0.85rem;font-weight:500;color:{colour}'>{text} {after}</span>"
+    return (
+        f"<span style='font-family:{MONO};font-size:0.85rem'>"
+        f"<span style='font-weight:500;color:{colour}'>{number}</span> "
+        f"<span style='color:{charts.AXIS_COLOUR}'>{after}</span></span>"
+    )
 
 
 def metric_html(label: str, value: str, second: str, title: str = "") -> str:
@@ -130,7 +141,8 @@ def metric_html(label: str, value: str, second: str, title: str = "") -> str:
     return (
         f"<div title='{title}' style='margin-bottom:1.25rem'>"
         f"<div style='font-size:0.85rem;color:{charts.AXIS_COLOUR}'>{label}</div>"
-        f"<div style='font-size:2.125rem;font-weight:500;line-height:1.25'>{value}</div>"
+        f"<div style='font-family:{MONO};font-size:2.125rem;font-weight:500;line-height:1.25;"
+        f"letter-spacing:-0.02em'>{value}</div>"
         f"<div>{second}</div></div>"
     )
 
@@ -232,12 +244,11 @@ if SELECTION not in st.session_state:
 
 newest = charts.MONTHS[data_until().month - 1]
 period_col, base_col = st.columns([3, 1])
-period = (
-    period_col.segmented_control("Month or whole year", charts.PERIODS, default=newest) or newest
+# required: clicking the chosen option again keeps it, so one is always selected
+period = period_col.segmented_control(
+    "Month or whole year", charts.PERIODS, default=newest, required=True
 )
-base = base_col.segmented_control("Compared with", list(BASES), default="1991–2020") or (
-    "1991–2020"
-)
+base = base_col.segmented_control("Compared with", list(BASES), default="1991–2020", required=True)
 month = 0 if period == charts.YEAR else charts.MONTHS.index(period) + 1
 # A thin grey line between the navigation and the content (st.divider has wide margins)
 st.html(f"<hr style='margin:0;border:none;border-top:1px solid {charts.RULE_COLOUR}'>")
@@ -426,19 +437,19 @@ with cell_part:
         metric_html(
             (f"{short_month} {year}" if month else f"{year} (full year)")
             + (" (preliminary)" if latest["is_preliminary"] else ""),
-            f"{latest['temp_c']:.1f} °C",
+            f"{latest['temp_c']:.1f}°",
             change_text(float(latest["temp_c"]) - base_value, base),
         )
         + metric_html(
             f"{short_month} {window_years} average".strip(),
-            f"{window['avg_temp_c']:.1f} °C",
+            f"{window['avg_temp_c']:.1f}°",
             change_text(float(window["avg_temp_c"]) - base_value, base),
         )
         + metric_html(
             # the change along the trend line, not one year minus another
             f"{short_month} since {trend_from}" if month else f"Annual, since {trend_from}",
             # The whole change along the trend line, then its rate per decade
-            f"{trend_total:+.1f} °C",
+            f"{trend_total:+.1f}°",
             change_text(float(trend["warming_c_per_decade"]), suffix="per decade", digits=2),
             title=f"Straight-line trend of {'every ' + name if month else 'the annual means'} "
             f"from {trend_from} to {trend_to}: its rate per decade × "

@@ -45,7 +45,7 @@ COLDER = "#2F5CAB"  # blue, from the map's palette
 NEUTRAL = "#5B6B73"  # graphite, for changes that round to zero
 
 
-FONT = "Barlow, sans-serif"  # the page's font (loaded by the theme), so charts match it
+FONT = "'IBM Plex Sans', sans-serif"  # the page's font (loaded by the theme), so charts match it
 AXIS_COLOUR = "#5B6B73"  # tick labels and the x-axis line: graphite
 GRID_COLOUR = "#D3DBDF"  # a shade darker than the paper
 RULE_COLOUR = "#C3CDD2"  # the line under the navigation
@@ -141,7 +141,7 @@ def history_vs_base(
             x=x,
             y=y,
             tooltip=[
-                alt.Tooltip("label:N", title=""),
+                alt.Tooltip("label:N", title="Period"),
                 alt.Tooltip("value:Q", title="°C", format=".1f"),
                 alt.Tooltip("change:Q", title=f"vs {base_label}", format="+.1f"),
             ],
@@ -201,7 +201,7 @@ def stripes_band(years: pd.DataFrame, base_value: float, base_label: str) -> alt
             y2=alt.value({"expr": f"height + {STRIPES_GAP + STRIPES_HEIGHT}"}),
             color=alt.Color("colour:N", scale=None),
             tooltip=[
-                alt.Tooltip("label:N", title=""),
+                alt.Tooltip("label:N", title="Year"),
                 alt.Tooltip("value:Q", title="°C", format=".1f"),
                 alt.Tooltip("change:Q", title=f"vs {base_label}", format="+.1f"),
             ],
@@ -323,7 +323,7 @@ def change_map(
         get_pixel_offset=[0, -18],
         # In quotes: pydeck reads any other text as an expression, and without them the
         # label isn't drawn
-        font_family="'Barlow, sans-serif'",
+        font_family="'IBM Plex Sans, sans-serif'",
         # deck.gl draws only ASCII unless told otherwise, and the label has ° and ±:
         # "auto" takes the characters from the text. In quotes, like font_family
         character_set="'auto'",
@@ -355,7 +355,7 @@ def change_map(
             "style": {
                 "backgroundColor": "#18262E",  # ink
                 "color": "#F7F9F9",
-                "fontFamily": "Barlow, sans-serif",
+                "fontFamily": "'IBM Plex Sans', sans-serif",
                 "fontSize": "0.8rem",
                 "padding": "4px 8px",
             },
