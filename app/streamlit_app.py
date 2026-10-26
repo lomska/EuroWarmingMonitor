@@ -174,7 +174,10 @@ st.write(
 # home button placed (Streamlit has no setting for these)
 st.html(
     """<style>
-    [data-testid="stMainBlockContainer"] { padding-top: 2.5rem; }
+    /* At most 1440 px wide, centred, so wide screens keep the laptop layout */
+    [data-testid="stMainBlockContainer"] {
+        padding-top: 2.5rem; max-width: 1440px; margin: 0 auto;
+    }
     /* The home button level with Streamlit's fullscreen button over the map */
     .st-key-home { margin-bottom: -1rem; }
     /* Figures in columns, so temperatures line up as they change */
@@ -341,7 +344,6 @@ latest = latest_all.loc[month]
 year = int(latest["year"])
 label = period_label(month, year)
 short_month = f"{pd.Timestamp(2000, month, 1):%b}" if month else ""
-full_month = f"{pd.Timestamp(2000, month, 1):%B}" if month else ""
 base_value = float(latest[base_column])
 history_all = query("history", gp=gp)  # every year of every month (1-12) and the year (0)
 
@@ -351,8 +353,8 @@ history_all = query("history", gp=gp)  # every year of every month (1-12) and th
 with map_part:
     st.markdown(
         # The colour scale sits where the subtitle would
-        charts.title_html(f"{label} compared to {full_month + ' ' if month else ''}{base} average")
-        + charts.legend_html(limit),
+        # "its": that month's (or the year's) own average, so the month needn't repeat
+        charts.title_html(f"{label} compared to its {base} average") + charts.legend_html(limit),
         unsafe_allow_html=True,
     )
     # Between the colour scale and the map, on the left; Streamlit's fullscreen button
