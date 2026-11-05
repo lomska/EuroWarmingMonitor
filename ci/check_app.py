@@ -19,7 +19,7 @@ APP_DIR = Path(__file__).resolve().parents[1] / "app"
 APP = str(APP_DIR / "streamlit_app.py")
 sys.path.insert(0, str(APP_DIR))  # the app's data module, to look up a test cell
 
-from data import open_source  # noqa: E402
+from data import BASES, open_source  # noqa: E402
 
 # A grid cell with no town in it, whatever the data (the CI test area or all of Europe)
 CELL_WITHOUT_TOWN = """
@@ -52,9 +52,9 @@ def check(source: str) -> list[str]:
     if not shown(at).startswith("Tbilisi"):
         problems.append(f"search for 'Tbilsi' showed {shown(at)[:60]}")
 
-    # The whole year compared with 1961-1990, then a single month
+    # The whole year compared with the early base period, then a single month
     at.segmented_control[0].set_value("Year").run()
-    at.segmented_control[1].set_value("1961–1990").run()
+    at.segmented_control[1].set_value(list(BASES)[1]).run()
     problems += [e.value for e in at.exception]
     at.segmented_control[0].set_value("Jan").run()
     problems += [e.value for e in at.exception]

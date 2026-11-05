@@ -20,7 +20,7 @@ import argparse
 import json
 import logging
 import os
-import shutil
+import sys
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -30,15 +30,11 @@ import psycopg
 import yaml
 from dotenv import load_dotenv
 
+# The tables and file names the app reads, so both sides agree on them
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
+from data import SPLIT_BY_MONTH, TABLES, parquet_files  # noqa: E402
+
 log = logging.getLogger("export")
-
-# Rows to leave out, per table (none at the moment): "table": "SQL condition"
-FILTERS: dict[str, str] = {}
-
-# Tables written as one file per value of a column, <table>_<column>_NN.parquet, side by
-# side with the others: a GitHub release has no folders (the app's data.py reads the
-# same names)
-SPLIT = {"mart_grid_history": "month"}
 
 # Temperatures to the hundredth of a degree: stored as whole numbers, which compress
 # far better than 4-byte floats (the history table: about half the size), and still
@@ -109,6 +105,7 @@ EXPORTS = {
         "rolling_is_preliminary": "BOOLEAN",
     },
 }
+assert set(EXPORTS) == set(TABLES), "EXPORTS must list exactly the tables the app reads"
 
 
 def connect() -> psycopg.Connection:
@@ -123,13 +120,12 @@ def connect() -> psycopg.Connection:
 
 
 def export_table(pg, duck, table: str, columns: dict[str, str], out_dir: Path, tmp: Path) -> int:
-    """Write one table (or its folder of files); returns its number of rows."""
+    """Write one table (or its files, one per month); returns its number of rows."""
     csv_path = tmp / f"{table}.csv"
     cols = ", ".join(columns)
     # Sorted by square, then month/year: the app reads one square at a time
     keys = ["grid_point_id"] + [c for c, kind in columns.items() if kind in ("TINYINT", "SMALLINT")]
-    where = f"where {FILTERS[table]}" if table in FILTERS else ""
-    query = f"select {cols} from marts.{table} {where} order by {', '.join(keys)}"
+    query = f"select {cols} from marts.{table} order by {', '.join(keys)}"
     copy_sql = f"COPY ({query}) TO STDOUT (FORMAT csv)"
     with csv_path.open("wb") as f, pg.cursor().copy(copy_sql) as copy:
         for block in copy:
@@ -147,22 +143,20 @@ def export_table(pg, duck, table: str, columns: dict[str, str], out_dir: Path, t
     """
     options = "(FORMAT parquet, COMPRESSION zstd, ROW_GROUP_SIZE 100000)"
 
-    if table not in SPLIT:
+    if table not in SPLIT_BY_MONTH:
         target = out_dir / f"{table}.parquet"
         duck.execute(f"COPY (select * from {rows_csv}) TO '{target.as_posix()}' {options}")
         csv_path.unlink()
         return duck.execute(f"select count(*) from '{target.as_posix()}'").fetchone()[0]
 
-    # One file per value: read the CSV once into DuckDB (on disk, in the temporary
-    # folder), then write each part, keeping the rows' order
-    column = SPLIT[table]
+    # One file per month (0 = the year): read the CSV once into DuckDB (on disk, in the
+    # temporary folder), then write each part, keeping the rows' order
     duck.execute(f"create or replace table split_rows as select * from {rows_csv}")
     csv_path.unlink()
-    values = duck.execute(f"select distinct {column} from split_rows order by 1").fetchall()
-    for (value,) in values:
-        target = out_dir / f"{table}_{column}_{value:02d}.parquet"
+    for month, name in enumerate(parquet_files(table)):
+        target = out_dir / name
         duck.execute(
-            f"COPY (select * from split_rows where {column} = {value}) "
+            f"COPY (select * from split_rows where month = {month}) "
             f"TO '{target.as_posix()}' {options}"
         )
     rows = duck.execute("select count(*) from split_rows").fetchone()[0]
@@ -171,10 +165,8 @@ def export_table(pg, duck, table: str, columns: dict[str, str], out_dir: Path, t
 
 
 def size_mb(out_dir: Path, table: str) -> float:
-    """A table's file, or its folder of files, in MB."""
-    files = list(out_dir.glob(f"{table}_{SPLIT[table]}_*.parquet")) if table in SPLIT else []
-    files = files or [out_dir / f"{table}.parquet"]
-    return sum(f.stat().st_size for f in files) / 1e6
+    """A table's file, or its files, in MB."""
+    return sum((out_dir / name).stat().st_size for name in parquet_files(table)) / 1e6
 
 
 def main() -> None:
@@ -191,17 +183,9 @@ def main() -> None:
     cfg = yaml.safe_load(args.config.read_text(encoding="utf-8"))
     args.out.mkdir(parents=True, exist_ok=True)
 
-    # Remove files of tables the app no longer reads, and the split tables' old files
-    # (rewritten below, and there may be fewer of them)
-    split_prefixes = tuple(f"{table}_{column}_" for table, column in SPLIT.items())
+    # Every file is rewritten below; this also removes those of tables no longer exported
     for old in args.out.glob("*.parquet"):
-        if old.stem.startswith(split_prefixes):
-            old.unlink()
-        elif old.stem not in EXPORTS or old.stem in SPLIT:
-            old.unlink()
-            log.info("removed %s (no longer exported)", old.name)
-    for table in SPLIT:  # the folder an earlier version of this script wrote
-        shutil.rmtree(args.out / table, ignore_errors=True)
+        old.unlink()
 
     with connect() as pg, tempfile.TemporaryDirectory() as tmp:
         # A database file in the temporary folder, so a split table needn't fit in memory
@@ -211,9 +195,9 @@ def main() -> None:
             log.info("%-32s %12s rows %8.1f MB", table, f"{rows:,}", size_mb(args.out, table))
         duck.close()
 
-        last_year = pg.execute(
-            "select max(year) from marts.mart_grid_history where month = 0"
-        ).fetchone()[0]
+        # The annual table directly: through the mart_grid_history view, month = 0 also
+        # scans the whole monthly table
+        last_year = pg.execute("select max(year) from marts.fct_grid_annual_temp").fetchone()[0]
         last_month = pg.execute(
             "select max(valid_month)::text from marts.fct_grid_monthly_temp"
             " where grid_point_id = (select min(grid_point_id) from marts.dim_grid_point)"

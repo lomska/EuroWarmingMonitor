@@ -30,7 +30,9 @@ coverage as (
 
 cities_in_area as (
 
-    select cities.*
+    select
+        cities.city_id,
+        st_setsrid(st_makepoint(cities.lon, cities.lat), 4326) as geom
     from cities
     cross join coverage
     where cities.lat between coverage.south and coverage.north
@@ -50,22 +52,17 @@ cross join lateral (
     -- these 4 with the tie-breaker gives the same answer as sorting them all.
     select
         nearest_four.grid_point_id,
-        st_distance(
-            nearest_four.geom::geography,
-            st_setsrid(st_makepoint(cities_in_area.lon, cities_in_area.lat), 4326)::geography
-        ) / 1000 as distance_km
+        st_distance(nearest_four.geom::geography, cities_in_area.geom::geography) / 1000
+            as distance_km
     from (
         select
             grid_points.grid_point_id,
             grid_points.lat,
             grid_points.lon,
             grid_points.geom,
-            grid_points.geom
-            <-> st_setsrid(st_makepoint(cities_in_area.lon, cities_in_area.lat), 4326) as dist
+            grid_points.geom <-> cities_in_area.geom as dist
         from grid_points
-        order by
-            grid_points.geom
-            <-> st_setsrid(st_makepoint(cities_in_area.lon, cities_in_area.lat), 4326)
+        order by grid_points.geom <-> cities_in_area.geom
         limit 4
     ) as nearest_four
     -- a place exactly on a border goes to the southern, then western, square

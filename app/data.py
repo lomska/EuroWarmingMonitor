@@ -56,11 +56,22 @@ def all_parquet_files() -> list[str]:
 # The project folder (this file is in app/)
 PROJECT = Path(__file__).resolve().parents[1]
 
-# Base periods the map can compare with: label -> column of mart_grid_latest_period
-BASES = {
-    "1991–2020": "change_vs_normal_c",
-    "1961–1990": "change_vs_early_normal_c",
-}
+
+def _base_periods() -> dict[str, str]:
+    """Base periods to compare with, the default first: label ("1991–2020") -> its
+    normal's column in mart_grid_latest_period. The years are dbt's vars, so the
+    labels follow them."""
+    import yaml
+
+    project = PROJECT / "dbt" / "dbt_project.yml"
+    v = yaml.safe_load(project.read_text(encoding="utf-8"))["vars"]
+    return {
+        f"{v['baseline_start']}–{v['baseline_end']}": "normal_c",
+        f"{v['early_baseline_start']}–{v['early_baseline_end']}": "early_normal_c",
+    }
+
+
+BASES = _base_periods()
 
 SQL = {
     "place": """
@@ -168,8 +179,6 @@ SEARCH_DUCKDB = """
 class PostgresSource:
     """The marts in Postgres, read as the read-only reader role."""
 
-    name = "postgres"
-
     def __init__(self) -> None:
         from sqlalchemy import URL, create_engine
 
@@ -209,8 +218,6 @@ class PostgresSource:
 class ParquetSource:
     """Parquet files exported from the marts, queried with DuckDB."""
 
-    name = "parquet"
-
     def __init__(self, location: str) -> None:
         import duckdb
 
@@ -218,7 +225,10 @@ class ParquetSource:
         self.conn = duckdb.connect()
         for table in TABLES:
             files = ", ".join(f"'{(self.location / f).as_posix()}'" for f in parquet_files(table))
-            self.conn.execute(f"create view {table} as select * from read_parquet([{files}])")
+            # The small tables are read into memory once, so searches and full-table
+            # queries don't decompress the files again; the large split one stays on disk
+            kind = "view" if table in SPLIT_BY_MONTH else "table"
+            self.conn.execute(f"create {kind} {table} as select * from read_parquet([{files}])")
 
     def query(self, sql: str, **params) -> pd.DataFrame:
         # Same :name placeholders as SQLAlchemy; DuckDB writes them $name
@@ -300,7 +310,7 @@ def download(address: str, progress: Callable[[float, str], None] | None = None)
 def map_sql(base: str) -> str:
     """Every square's change for one month (1-12) or the year (0), vs the base period."""
     return f"""
-        select g.lat, g.lon, m.{BASES[base]} as value, m.year
+        select g.grid_point_id, g.lat, g.lon, m.temp_c - m.{BASES[base]} as value
         from mart_grid_latest_period as m
         inner join dim_grid_point as g on m.grid_point_id = g.grid_point_id
         where m.month = :month

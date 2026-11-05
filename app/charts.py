@@ -16,8 +16,6 @@ MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", 
 YEAR = "Year"
 PERIODS = [*MONTHS, YEAR]
 
-HIGHLIGHT = "#A94A1A"  # rust, from the warm end of the map's scale
-ANNUAL = "#5B6B73"  # graphite, for the base-period line on chart paper
 
 # Diverging scale for change, colder to warmer: blue - pale - orange-brown.
 # 20 steps; zero falls between the two palest
@@ -40,15 +38,22 @@ MAP_MAX_HEIGHT = 460
 MAP_PHONE_WIDTH = 340  # on a phone: its screen less the page margins
 
 
-WARMER = HIGHLIGHT  # rust
+WARMER = "#A94A1A"  # rust, from the warm end of the map's scale
 COLDER = "#2F5CAB"  # blue, from the map's palette
-NEUTRAL = "#5B6B73"  # graphite, for changes that round to zero
+# Graphite: the base-period line, tick labels and the x-axis line, secondary text, and
+# changes that round to zero
+GRAPHITE = "#5B6B73"
 
 
 FONT = "'IBM Plex Sans', sans-serif"  # the page's font (loaded by the theme), so charts match it
-AXIS_COLOUR = "#5B6B73"  # tick labels and the x-axis line: graphite
 GRID_COLOUR = "#D3DBDF"  # a shade darker than the paper
 RULE_COLOUR = "#C3CDD2"  # the line under the navigation
+
+
+def signed_number(change: float, digits: int = 1) -> str:
+    """A change with its sign, "±0.0" when it rounds to zero (no unit)."""
+    change = round(change, digits) + 0.0  # + 0.0 turns -0.0 into 0.0
+    return f"±{0:.{digits}f}" if change == 0 else f"{change:+.{digits}f}"
 
 
 def history_vs_base(
@@ -56,7 +61,7 @@ def history_vs_base(
     base_value: float,
     base_label: str,
     height: int,
-    stripes: pd.DataFrame | None = None,
+    stripes: pd.DataFrame,
 ):
     """A line over the years, rust where it is above the base-period average and
     blue where below, with the average as a dashed line across the whole chart.
@@ -66,7 +71,7 @@ def history_vs_base(
     there. The line is dotted from the last final point on, where it uses
     preliminary data. The unit is in the chart's subtitle, so the axes carry none.
 
-    `stripes` (optional; columns year, value, preliminary) are the single years behind
+    `stripes` (columns year, value, preliminary) are the single years behind
     the averages. They are drawn as a band of warming stripes under the line, on the
     same time axis, coloured by their difference from the base-period average."""
     pts = points.sort_values("year").reset_index(drop=True)
@@ -93,25 +98,22 @@ def history_vs_base(
             ]
     segments = pd.DataFrame(rows)
 
-    has_stripes = stripes is not None and not stripes.empty
-    if has_stripes:
-        # Each stripe spans its year, so the axis runs from the first stripe's left edge
-        domain = [int(stripes["year"].min()) - 0.5, int(stripes["year"].max()) + 0.5]
-        domain = [min(domain[0], min(xs)), max(domain[1], max(xs))]
-    else:
-        domain = [min(xs), max(xs)]
-    x_scale = alt.Scale(domain=domain, nice=False)
-    # With stripes, the year labels move down below them
+    # Each stripe spans its year, so the axis runs from the first stripe's left edge
+    domain = [
+        min(int(stripes["year"].min()) - 0.5, min(xs)),
+        max(int(stripes["year"].max()) + 0.5, max(xs)),
+    ]
+    # The year labels sit below the stripes
     x = alt.X(
         "year:Q",
         title=None,
-        scale=x_scale,
+        scale=alt.Scale(domain=domain, nice=False),
         axis=alt.Axis(
             format="d",
             tickCount=8,
             grid=False,
-            domain=not has_stripes,
-            offset=STRIPES_GAP + STRIPES_HEIGHT + 2 if has_stripes else 0,
+            domain=False,
+            offset=STRIPES_GAP + STRIPES_HEIGHT + 2,
         ),
     )
     y = alt.Y("value:Q", title=None, scale=alt.Scale(zero=False))
@@ -149,22 +151,20 @@ def history_vs_base(
     )
     base = (
         alt.Chart(pd.DataFrame({"value": [base_value]}))
-        .mark_rule(color=ANNUAL, strokeWidth=1.5, strokeDash=[5, 4])
+        .mark_rule(color=GRAPHITE, strokeWidth=1.5, strokeDash=[5, 4])
         .encode(y="value:Q", tooltip=[alt.Tooltip("value:Q", title=base_label, format=".1f")])
     )
-    layers = [base, line, hover]
-    if has_stripes:
-        # Drawn under the plot as part of the same chart (a separate chart below would
-        # not stretch to the column's width in Streamlit)
-        layers.append(stripes_band(stripes, base_value, base_label))
-    chart = alt.layer(*layers).properties(height=height)
+    # The stripes are drawn under the plot as part of the same chart (a separate chart
+    # below would not stretch to the column's width in Streamlit)
+    stripes_layer = stripes_band(stripes, base_value, base_label)
+    chart = alt.layer(base, line, hover, stripes_layer).properties(height=height)
     return (
         chart.configure(font=FONT)
         .configure_view(stroke=None)
         # Horizontal gridlines only; an x-axis line, no y-axis line or ticks
-        .configure_axis(labelColor=AXIS_COLOUR, labelFontSize=12, gridColor=GRID_COLOUR)
+        .configure_axis(labelColor=GRAPHITE, labelFontSize=12, gridColor=GRID_COLOUR)
         .configure_axisY(domain=False, ticks=False)
-        .configure_axisX(domain=True, domainColor=AXIS_COLOUR, ticks=False)
+        .configure_axisX(domain=True, domainColor=GRAPHITE, ticks=False)
     )
 
 
@@ -213,7 +213,7 @@ def title_html(title: str, subtitle: str = "") -> str:
     """A chart's title and its graphite subtitle (which holds the unit)."""
     html = f"<div style='font-weight:600;font-size:1rem'>{title}</div>"
     if subtitle:
-        html += f"<div style='color:{AXIS_COLOUR};font-size:0.85rem'>{subtitle}</div>"
+        html += f"<div style='color:{GRAPHITE};font-size:0.85rem'>{subtitle}</div>"
     return html
 
 
@@ -265,23 +265,28 @@ def sea_mask() -> dict | None:
     return json.loads(SEA_MASK.read_text(encoding="utf-8")) if SEA_MASK.exists() else None
 
 
+def coloured_squares(squares: pd.DataFrame, limit: float) -> pd.DataFrame:
+    """The map's squares with their colour (r, g, b, a) and hover text (label): the
+    same for every place, so the app computes them once per month and base period."""
+    # grid_point_id: a click reports the square's own id, so the app needn't rebuild it
+    out = squares[["grid_point_id", "lat", "lon"]].copy()
+    out[["r", "g", "b"]] = diverging_colour(squares["value"].to_numpy(), limit)
+    out["a"] = 204  # 20% transparent: the base map shows through a little
+    # The hover text's number, like the rest of the page: one decimal, ±0.0 at zero
+    out["label"] = [f"{signed_number(v)} °C" for v in squares["value"]]
+    return out
+
+
 def change_map(
     squares: pd.DataFrame,
-    limit: float,
     place: dict,
     view: pdk.ViewState,
     place_label: str,
     base_label: str,
 ) -> pdk.Deck:
-    """Every square coloured by its change, with the chosen place marked and labelled.
-    Hovering a cell shows its change against the base period and where it is."""
-    squares = squares.copy()
-    squares[["r", "g", "b"]] = diverging_colour(squares["value"].to_numpy(), limit)
-    squares["a"] = 204  # 20% transparent: the base map shows through a little
-    # The hover text's number, like the rest of the page: one decimal, ±0.0 at zero
-    rounded = squares["value"].round(1) + 0.0
-    squares["label"] = ["±0.0 °C" if v == 0 else f"{v:+.1f} °C" for v in rounded]
-
+    """Every square coloured by its change (`squares` from coloured_squares), with the
+    chosen place marked and labelled. Hovering a cell shows its change against the
+    base period and where it is."""
     # The square's corners are computed in the browser from its centre, which
     # keeps the data sent to it small
     corners = (
@@ -291,7 +296,7 @@ def change_map(
     squares_layer = pdk.Layer(
         "PolygonLayer",
         id="squares",  # clicks report the square under this name
-        data=squares[["lat", "lon", "r", "g", "b", "a", "label"]],
+        data=squares,
         get_polygon=corners,
         get_fill_color="[r, g, b, a]",
         stroked=False,
@@ -355,7 +360,7 @@ def change_map(
             "style": {
                 "backgroundColor": "#18262E",  # ink
                 "color": "#F7F9F9",
-                "fontFamily": "'IBM Plex Sans', sans-serif",
+                "fontFamily": FONT,
                 "fontSize": "0.8rem",
                 "padding": "4px 8px",
             },
@@ -369,7 +374,7 @@ def legend_html(limit: float) -> str:
     steps = "".join(f'<div style="flex:1;background:{c}"></div>' for c in DIVERGING)
     return (
         '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;'
-        f'font-size:0.8rem;color:{AXIS_COLOUR};white-space:nowrap;font-variant-numeric:tabular-nums">'
+        f'font-size:0.8rem;color:{GRAPHITE};white-space:nowrap;font-variant-numeric:tabular-nums">'
         f"<span>−{limit:.1f} °C</span>"
         f'<div style="flex:1 1 120px;max-width:260px;height:8px;display:flex">{steps}</div>'
         f"<span>+{limit:.1f} °C</span>"

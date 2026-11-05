@@ -11,6 +11,7 @@ Reads the marts in Postgres, or exported Parquet files (see app/data.py).
 from __future__ import annotations
 
 import math
+import os
 
 import numpy as np
 import pandas as pd
@@ -33,6 +34,10 @@ st.set_page_config(
 
 # --- data, cached ------------------------------------------------------------------
 
+# Results from Postgres are kept an hour, so a rebuild shows up; Parquet files don't
+# change while the app runs, so their results are kept for good
+TTL = "1h" if os.getenv("TEMPRADAR_SOURCE", "postgres") == "postgres" else None
+
 
 # Once per app start (files from a web address are downloaded before, with a progress bar)
 @st.cache_resource(show_spinner="Loading the data…")
@@ -40,12 +45,12 @@ def source():
     return open_source()
 
 
-@st.cache_data(ttl="1h", show_spinner=False)
+@st.cache_data(ttl=TTL, show_spinner=False)
 def query(name: str, **params) -> pd.DataFrame:
     return source().query(SQL[name], **params)
 
 
-@st.cache_data(ttl="1h", show_spinner=False)
+@st.cache_data(ttl=TTL, show_spinner=False)
 def search(q: str) -> pd.DataFrame:
     return source().search(q, limit=15)
 
@@ -55,7 +60,7 @@ def search(q: str) -> pd.DataFrame:
 DEFAULT_PLACE = 2988507
 
 
-@st.cache_data(ttl="1h", show_spinner=False)
+@st.cache_data(ttl=TTL, show_spinner=False)
 def default_place() -> int:
     if not source().query(SQL["place"], city_id=DEFAULT_PLACE).empty:
         return DEFAULT_PLACE
@@ -63,7 +68,7 @@ def default_place() -> int:
     return int(df["city_id"].iloc[0])
 
 
-@st.cache_data(ttl="1h", show_spinner=False)
+@st.cache_data(ttl=TTL, show_spinner=False)
 def data_until() -> pd.Timestamp:
     """The newest month in the data (its first day)."""
     df = source().query(
@@ -74,22 +79,28 @@ def data_until() -> pd.Timestamp:
     return pd.Timestamp(ym // 100, ym % 100, 1)
 
 
-@st.cache_data(ttl="1h", show_spinner="Loading the map…")
+@st.cache_data(ttl=TTL, show_spinner="Loading the map…")
 def map_squares(base: str, month: int) -> pd.DataFrame:
     return source().query(map_sql(base), month=month).dropna(subset=["value"])
 
 
-@st.cache_data(ttl="1h", show_spinner=False)
+@st.cache_data(ttl=TTL, show_spinner=False)
 def colour_limit(base: str, annual: bool) -> float:
     """One colour scale for all twelve months, so switching months keeps colours
     comparable, and its own for the year, whose changes are much smaller: wide enough
     for all but the most extreme 2% of cells."""
     months = "month = 0" if annual else "month > 0"
     values = source().query(
-        f"select {BASES[base]} as v from mart_grid_latest_period where {months}"
+        f"select temp_c - {BASES[base]} as v from mart_grid_latest_period where {months}"
     )["v"]
     limit = float(np.nanpercentile(np.abs(values), 98))
     return max(0.5, math.ceil(limit * 2) / 2)  # rounded up to 0.5 °C
+
+
+@st.cache_data(ttl=TTL, show_spinner=False)
+def map_cells(base: str, month: int) -> pd.DataFrame:
+    """The map's squares, coloured: the same for every place, so not redone per click."""
+    return charts.coloured_squares(map_squares(base, month), colour_limit(base, month == 0))
 
 
 def fmt_population(n) -> str:
@@ -102,8 +113,7 @@ def coordinates(lat: float, lon: float) -> str:
 
 def signed(change: float, digits: int = 1) -> str:
     """A change in °C with its sign; ±0.0 °C when it rounds to zero."""
-    change = round(change, digits) + 0.0  # + 0.0 turns -0.0 into 0.0
-    return f"±{0:.{digits}f} °C" if change == 0 else f"{change:+.{digits}f} °C"
+    return f"{charts.signed_number(change, digits)} °C"
 
 
 def on_phone() -> bool:
@@ -120,19 +130,18 @@ def change_text(change: float, base: str = "", suffix: str = "", digits: int = 1
     """A change as its signed number in the chart's colours (rust when warmer, blue when
     colder, graphite when it rounds to zero), with no arrow: the sign and colour say it.
     Followed in graphite by "vs <base>", or by `suffix` when given."""
-    change = round(change, digits) + 0.0  # + 0.0 turns -0.0 into 0.0
-    if change > 0:
+    number = charts.signed_number(change, digits)
+    if number.startswith("+"):
         colour = charts.WARMER
-    elif change < 0:
+    elif number.startswith("-"):
         colour = charts.COLDER
     else:
-        colour = charts.NEUTRAL
-    number = f"±{0:.{digits}f}°" if change == 0 else f"{change:+.{digits}f}°"
+        colour = charts.GRAPHITE
     after = suffix or f"vs {base}"
     return (
         f"<span style='font-family:{MONO};font-size:0.85rem'>"
-        f"<span style='font-weight:500;color:{colour}'>{number}</span> "
-        f"<span style='color:{charts.AXIS_COLOUR}'>{after}</span></span>"
+        f"<span style='font-weight:500;color:{colour}'>{number}°</span> "
+        f"<span style='color:{charts.GRAPHITE}'>{after}</span></span>"
     )
 
 
@@ -140,7 +149,7 @@ def metric_html(label: str, value: str, second: str, title: str = "") -> str:
     """A big number with its graphite label above and its change below."""
     return (
         f"<div title='{title}' style='margin-bottom:1.25rem'>"
-        f"<div style='font-size:0.85rem;color:{charts.AXIS_COLOUR}'>{label}</div>"
+        f"<div style='font-size:0.85rem;color:{charts.GRAPHITE}'>{label}</div>"
         f"<div style='font-family:{MONO};font-size:2.125rem;font-weight:500;line-height:1.25;"
         f"letter-spacing:-0.02em'>{value}</div>"
         f"<div>{second}</div></div>"
@@ -158,8 +167,13 @@ def cell_width_km(lat: float) -> float:
     return CELL_HEIGHT_KM * math.cos(math.radians(lat))
 
 
+def month_name(month: int) -> str:
+    """The month's full name: January for 1."""
+    return f"{pd.Timestamp(2000, month, 1):%B}"
+
+
 def period_label(month: int, year: int) -> str:
-    return str(year) if month == 0 else f"{pd.Timestamp(2000, month, 1):%B} {year}"
+    return str(year) if month == 0 else f"{month_name(month)} {year}"
 
 
 # --- header ---------------------------------------------------------------------------
@@ -218,15 +232,13 @@ reset_map_view = clear_map_selection
 def on_map_click() -> None:
     objects = st.session_state[map_key()].selection.objects.get("squares", [])
     if objects:
-        lat, lon = objects[0]["lat"], objects[0]["lon"]
-        # Same id as the grid_point_id macro in dbt
-        st.session_state[SELECTION] = ("square", f"{round(lat * 100)}_{round(lon * 100)}")
+        st.session_state[SELECTION] = ("square", objects[0]["grid_point_id"])
         st.session_state["typed"] = ""  # a click replaces the search
 
 
 def on_pick(key: str) -> None:
     st.session_state[SELECTION] = ("place", st.session_state[key])
-    clear_map_selection()
+    clear_map_selection()  # the place replaces a clicked square
 
 
 def on_type() -> None:
@@ -251,11 +263,12 @@ period_col, base_col = st.columns([3, 1])
 period = period_col.segmented_control(
     "Month or whole year", charts.PERIODS, default=newest, required=True
 )
-base = base_col.segmented_control("Compared with", list(BASES), default="1991–2020", required=True)
+base = base_col.segmented_control(
+    "Compared with", list(BASES), default=next(iter(BASES)), required=True
+)
 month = 0 if period == charts.YEAR else charts.MONTHS.index(period) + 1
 # A thin grey line between the navigation and the content (st.divider has wide margins)
 st.html(f"<hr style='margin:0;border:none;border-top:1px solid {charts.RULE_COLOUR}'>")
-base_column = "normal_c" if base == "1991–2020" else "early_normal_c"
 
 # The map (left) and the chosen place or grid cell (right). Each is one column, so on
 # a phone they stack: the search first, then the map, then everything about the place.
@@ -301,8 +314,7 @@ with search_part:
                 args=(key,),
             )
             if st.session_state.pop("new_search", False):  # a new search shows its best match
-                st.session_state[SELECTION] = ("place", st.session_state[key])
-                clear_map_selection()
+                on_pick(key)
 
 
 # --- the chosen place or grid cell ---------------------------------------------------------
@@ -333,18 +345,19 @@ if place:
 else:
     st.query_params["cell"] = gp
 
-squares = map_squares(base, month)
+squares = map_cells(base, month)
 view, map_width, map_height = charts.map_frame(
     squares, max_width=charts.MAP_PHONE_WIDTH if phone else charts.MAP_MAX_WIDTH
 )
-limit = colour_limit(base, annual=month == 0)
+limit = colour_limit(base, month == 0)
 
 latest_all = query("latest", gp=gp).set_index("month")  # every month (1-12) and the year (0)
 latest = latest_all.loc[month]
 year = int(latest["year"])
 label = period_label(month, year)
-short_month = f"{pd.Timestamp(2000, month, 1):%b}" if month else ""
-base_value = float(latest[base_column])
+short_month = charts.MONTHS[month - 1] if month else ""
+base_value = float(latest[BASES[base]])
+latest_change = float(latest["temp_c"]) - base_value
 history_all = query("history", gp=gp)  # every year of every month (1-12) and the year (0)
 
 
@@ -367,9 +380,8 @@ with map_part:
         on_click=reset_map_view,
     )
     marker = place or {"lat": square["lat"], "lon": square["lon"]}
-    map_change = float(latest["temp_c"]) - base_value
     st.pydeck_chart(
-        charts.change_map(squares, limit, marker, view, signed(map_change), base),
+        charts.change_map(squares, marker, view, signed(latest_change), base),
         width=map_width,  # the grid's own shape, so no empty margins
         height=map_height,
         on_select=on_map_click,
@@ -403,7 +415,7 @@ with cell_part:
     # Three numbers: the latest value, the 10-year mean up to it, the trend since 1940
     if month:
         trend = query("trend", gp=gp).set_index("month").loc[month]
-        name = f"{pd.Timestamp(2000, month, 1):%B}"
+        name = month_name(month)
     else:
         trend = query("annual_trend", gp=gp).iloc[0]
         name = "Year"
@@ -412,23 +424,20 @@ with cell_part:
     years = period_history.rename(columns={"temp_c": "value", "is_preliminary": "preliminary"})[
         ["year", "value", "preliminary"]
     ]
-    # The 10-year averages, from the first complete window on
+    # The 10-year averages, from the first complete window on, each at its last year
     windows = (
         period_history.dropna(subset=["rolling_avg_c"])
-        .rename(columns={"year": "window_end_year"})[
-            ["rolling_start_year", "window_end_year", "rolling_avg_c", "rolling_is_preliminary"]
-        ]
         .rename(
             columns={
-                "rolling_start_year": "window_start_year",
-                "rolling_avg_c": "avg_temp_c",
-                "rolling_is_preliminary": "is_preliminary",
+                "rolling_start_year": "start_year",
+                "rolling_avg_c": "value",
+                "rolling_is_preliminary": "preliminary",
             }
-        )
-        .astype({"window_start_year": int})
+        )[["start_year", "year", "value", "preliminary"]]
+        .astype({"start_year": int})
     )
     window = windows.iloc[-1]
-    window_years = f"{int(window['window_start_year'])}–{int(window['window_end_year'])}"
+    window_years = f"{int(window['start_year'])}–{int(window['year'])}"
     trend_from, trend_to = int(trend["first_year"]), int(trend["last_year"])
     decades = (trend_to - trend_from) / 10
     trend_total = float(trend["warming_c_per_decade"]) * decades
@@ -440,12 +449,12 @@ with cell_part:
             (f"{short_month} {year}" if month else f"{year} (full year)")
             + (" (preliminary)" if latest["is_preliminary"] else ""),
             f"{latest['temp_c']:.1f}°",
-            change_text(float(latest["temp_c"]) - base_value, base),
+            change_text(latest_change, base),
         )
         + metric_html(
             f"{short_month} {window_years} average".strip(),
-            f"{window['avg_temp_c']:.1f}°",
-            change_text(float(window["avg_temp_c"]) - base_value, base),
+            f"{window['value']:.1f}°",
+            change_text(float(window["value"]) - base_value, base),
         )
         + metric_html(
             # the change along the trend line, not one year minus another
@@ -496,18 +505,11 @@ with cell_part:
         ),
         unsafe_allow_html=True,
     )
-    history = windows.rename(
-        columns={
-            "window_end_year": "year",
-            "avg_temp_c": "value",
-            "is_preliminary": "preliminary",
-        }
-    )
-    history["label"] = (
-        (f"{name} " if month else "")
-        + history["window_start_year"].astype(str)
+    history = windows.assign(
+        label=(f"{name} " if month else "")
+        + windows["start_year"].astype(str)
         + "–"
-        + history["year"].astype(str)
+        + windows["year"].astype(str)
     )
     chart_col.altair_chart(
         charts.history_vs_base(

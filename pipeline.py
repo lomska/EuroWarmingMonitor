@@ -39,8 +39,6 @@ DEFAULT_CONFIG = Path("config/pipeline.yml")
 # When the last successful build started from; compared with the load log
 LAST_BUILD_FILE = ROOT / "data" / "last_build.txt"
 
-STEPS = ["extract", "load", "transform", "test", "docs", "export", "all"]
-
 log = logging.getLogger("pipeline")
 
 
@@ -155,6 +153,7 @@ RUNNERS = {
     "export": export,
     "all": run_all,
 }
+STEPS = list(RUNNERS)
 
 
 def main() -> None:
