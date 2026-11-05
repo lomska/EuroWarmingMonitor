@@ -8,14 +8,6 @@ This climate app lets you locate your European city's ERA5 grid cell to compare 
 
 The project is built as an ELT pipeline: ERA5 reanalysis since 1940 on a 0.25° grid (41,869 grid cells, 43.6 million monthly values) and 75,812 GeoNames places are loaded into PostgreSQL/PostGIS, modelled and tested with dbt, checked in CI, and served by a Streamlit app.
 
-## What the data shows
-
-Over European land, area-weighted, from ERA5 data for 1940–2025:
-
-- **Warming acceleration after the mid-1980s.** The 10-year average over Europe was 7.4 °C in 1940–1949, then 7.6 °C in 1976–1985, then rose to 9.7 °C in 2016–2025.
-- **Winter warmed fastest, September slowest.** January (+0.47 °C per decade), March (+0.45) and February (+0.42) lead, against +0.14 °C for September. Winters also vary most from year to year.
-- **The Atlantic coast warmed least.** By the largest town in each cell, Ireland (+0.07 °C per decade), Portugal (+0.14) and the United Kingdom (+0.19) warmed least; Norway (+0.41), Belarus (+0.35), Switzerland and Austria (+0.33) most. Warming is also faster in the north: +0.26 °C per decade south of 45° N, +0.30 between 50° N and 70° N.
-
 ## How it works
 
 ```mermaid
